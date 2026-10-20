@@ -36,8 +36,17 @@ jobs:
           sha256: "092abe13e3ab7456a95bcd145e8c3074181d5f2c0e9eb6a9de54eb86ed6486d7"
           download-url: "https://github.com/pantheon-org/tekhne/releases/download/tool/pantheon-skill-auditor-v0.3.0/pantheon-skill-auditor-x86_64-unknown-linux-gnu.tar.xz"
 
+      # Exit codes: 0 clean, 1 error, 2 warnings only, 3 usage error. Warnings do
+      # not fail the job (the same policy as tekhne); errors and usage errors do.
       - name: Validate structure
-        run: pantheon-skill-auditor validate structure --allow-dirs=evals skill-quality-auditor
+        run: |
+          rc=0
+          pantheon-skill-auditor validate structure --allow-dirs=evals skill-quality-auditor || rc=$?
+          case "$rc" in
+            0) ;;
+            2) echo "::warning::validate structure reported warnings only" ;;
+            *) exit "$rc" ;;
+          esac
 
       # Same gate as tekhne: A and A+ pass, B and B+ warn, anything lower fails.
       - name: Grade the skill
