@@ -1,0 +1,51 @@
+name: Audit skill
+
+# The embedded skill (skill-quality-auditor/) is audited with a released binary through this
+# repository's own action, the way a consuming repository would. Until this
+# repository has its own release, the bootstrap binary is the tekhne v0.3.0 one.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - "skill-quality-auditor/**"
+      - "action.yml"
+      - ".github/workflows/audit-skill.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skill-quality-auditor/**"
+      - "action.yml"
+      - ".github/workflows/audit-skill.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit skill
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pantheon-skill-auditor
+        uses: ./
+        with:
+          version: "0.3.0"
+          sha256: "092abe13e3ab7456a95bcd145e8c3074181d5f2c0e9eb6a9de54eb86ed6486d7"
+          download-url: "https://github.com/pantheon-org/tekhne/releases/download/tool/pantheon-skill-auditor-v0.3.0/pantheon-skill-auditor-x86_64-unknown-linux-gnu.tar.xz"
+
+      - name: Validate structure
+        run: pantheon-skill-auditor validate structure --allow-dirs=evals skill-quality-auditor
+
+      # Same gate as tekhne: A and A+ pass, B and B+ warn, anything lower fails.
+      - name: Grade the skill
+        run: |
+          grade=$(pantheon-skill-auditor evaluate ./skill-quality-auditor --json | jq -r '.grade // "?"')
+          echo "grade: $grade"
+          case "$grade" in
+            A|A+) ;;
+            B+|B) echo "::warning::skill grade $grade is below A" ;;
+            *) echo "::error::skill grade $grade is below B"; exit 1 ;;
+          esac
