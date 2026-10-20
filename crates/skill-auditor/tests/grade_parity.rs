@@ -77,6 +77,12 @@ fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden-corpus")
 }
 
+/// A pantheon-org/tekhne checkout holding the live skills the corpus names, from
+/// `TEKHNE_ROOT`. Without it, live entries are skipped.
+fn live_root() -> Option<PathBuf> {
+    std::env::var_os("TEKHNE_ROOT").map(PathBuf::from)
+}
+
 /// Repository root: the crate lives at `<root>/crates/skill-auditor`.
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -269,7 +275,7 @@ fn rust_auditor_matches_go_golden_corpus() {
 
     let by_dir: HashMap<&str, &Golden> = goldens.iter().map(|g| (g.dir.as_str(), g)).collect();
 
-    let score = |rel: &str| {
+    let score_in = |root: &std::path::Path, rel: &str| {
         let skill_path = root.join(rel).join("SKILL.md");
         score_with_date(&skill_path, PINNED_DATE)
             .unwrap_or_else(|e| panic!("score {}: {e}", skill_path.display()))
@@ -283,7 +289,7 @@ fn rust_auditor_matches_go_golden_corpus() {
         let golden = by_dir
             .get(rel.as_str())
             .unwrap_or_else(|| panic!("no golden for corpus entry {rel}"));
-        let got = score(rel);
+        let got = score_in(&root, rel);
 
         let before = diffs.len();
         diff_result(rel, &golden.result, &got, &mut diffs);
@@ -295,17 +301,31 @@ fn rust_auditor_matches_go_golden_corpus() {
         }
     }
 
-    // Live skills: invariants only, so a skill edit cannot break the gate.
-    for rel in &live {
-        check_invariants(rel, &score(rel), &mut diffs);
-    }
+    // Live skills: invariants only, so a skill edit cannot break the gate. They
+    // live in a tekhne checkout, so they run only when TEKHNE_ROOT names one;
+    // the frozen fixtures above are always checked.
+    let live_checked = match live_root() {
+        Some(tekhne) => {
+            for rel in &live {
+                check_invariants(rel, &score_in(&tekhne, rel), &mut diffs);
+            }
+            live.len()
+        }
+        None => {
+            eprintln!(
+                "skipping {} live skill(s): set TEKHNE_ROOT to a pantheon-org/tekhne checkout to include them",
+                live.len()
+            );
+            0
+        }
+    };
 
     if !diffs.is_empty() {
         panic!(
             "PARITY FAIL: {} divergence(s) across {} frozen fixture(s) and {} live skill(s):\n{}",
             diffs.len(),
             frozen.len(),
-            live.len(),
+            live_checked,
             diffs.join("\n"),
         );
     }
@@ -315,6 +335,6 @@ fn rust_auditor_matches_go_golden_corpus() {
          (all Result fields exact bar the excluded date; detail lists compared as sorted \
          multisets); {} live skill(s) satisfy the scorer invariants.",
         frozen.len(),
-        live.len(),
+        live_checked,
     );
 }

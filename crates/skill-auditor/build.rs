@@ -1,9 +1,8 @@
 //! Build script that embeds the canonical companion skill tree into the
 //! binary so a downloaded `skill-auditor` is self-contained.
 //!
-//! It walks the canonical `skills/agentic-harness/skill-quality-auditor`
-//! directory (relative to the workspace, never a copy committed inside this
-//! crate) and generates `$OUT_DIR/embedded_skill.rs`, a table of
+//! It walks the canonical `skill-quality-auditor/` directory at the repository root (never a
+//! copy committed inside this crate) and generates `$OUT_DIR/embedded_skill.rs`, a table of
 //! `(relative-path, &'static [u8])` entries backed by `include_bytes!`. The
 //! bytes are baked in at compile time, so no repository is needed at runtime.
 
@@ -13,18 +12,16 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    // The canonical, single-source-of-truth skill lives two levels up under
-    // `skills/`. We embed from there rather than duplicating the tree.
+    // The canonical, single-source-of-truth skill lives two levels up in
+    // `skill-quality-auditor/`. We embed from there rather than duplicating the tree.
     let skill_root = manifest_dir
-        .join("../../skills/agentic-harness/skill-quality-auditor")
+        .join("../../skill-quality-auditor")
         .canonicalize()
         .expect("canonical skill directory must exist at build time");
 
-    let skill_name = skill_root
-        .file_name()
-        .and_then(|n| n.to_str())
-        .expect("skill directory has a name")
-        .to_string();
+    // The installed directory name is the skill's own `name`, not the name of
+    // the folder it is stored in.
+    let skill_name = skill_name_from_frontmatter(&skill_root);
 
     let mut files: BTreeMap<String, PathBuf> = BTreeMap::new();
     collect_files(&skill_root, &skill_root, &mut files);
@@ -71,4 +68,28 @@ fn collect_files(root: &Path, dir: &Path, out: &mut BTreeMap<String, PathBuf>) {
             out.insert(rel, path);
         }
     }
+}
+
+/// Read `name:` from the YAML frontmatter of `<root>/SKILL.md`.
+fn skill_name_from_frontmatter(root: &Path) -> String {
+    let skill_md = root.join("SKILL.md");
+    let text = fs::read_to_string(&skill_md).expect("read SKILL.md");
+    let mut lines = text.lines();
+    assert_eq!(
+        lines.next().map(str::trim),
+        Some("---"),
+        "SKILL.md must start with YAML frontmatter"
+    );
+    for line in lines {
+        if line.trim() == "---" {
+            break;
+        }
+        if let Some(name) = line.strip_prefix("name:") {
+            return name
+                .trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string();
+        }
+    }
+    panic!("SKILL.md frontmatter has no name:");
 }

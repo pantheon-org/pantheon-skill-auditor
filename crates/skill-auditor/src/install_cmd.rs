@@ -9,8 +9,8 @@
 
 use std::path::{Path, PathBuf};
 
-use common::{Error, Result};
-use skill_install::{
+use ahdk_core::{Error, Result};
+use ahdk_install::{
     agents::{all, by_name, AgentConfig},
     env::Environment,
     install::{install_skill, resolve_target_dir, uninstall_skill, InstallMode},

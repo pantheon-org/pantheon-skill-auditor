@@ -93,6 +93,12 @@ fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden-corpus")
 }
 
+/// A pantheon-org/tekhne checkout holding the live skills the corpus names, from
+/// `TEKHNE_ROOT`. Without it, live entries are skipped.
+fn live_root() -> Option<PathBuf> {
+    std::env::var_os("TEKHNE_ROOT").map(PathBuf::from)
+}
+
 /// Repository root: the crate lives at `<root>/crates/skill-validator-rs`.
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -428,17 +434,31 @@ fn rust_validator_matches_go_golden_corpus() {
         diff_structure(rel, &golden.structure, &got, &mut diffs);
     }
 
-    // Live skills: invariants only, so a skill edit cannot break the gate.
-    for rel in &live {
-        check_invariants(rel, &root.join(rel), &mut diffs);
-    }
+    // Live skills: invariants only, so a skill edit cannot break the gate. They
+    // live in a tekhne checkout, so they run only when TEKHNE_ROOT names one;
+    // the frozen fixtures above are always checked.
+    let live_checked = match live_root() {
+        Some(tekhne) => {
+            for rel in &live {
+                check_invariants(rel, &tekhne.join(rel), &mut diffs);
+            }
+            live.len()
+        }
+        None => {
+            eprintln!(
+                "skipping {} live skill(s): set TEKHNE_ROOT to a pantheon-org/tekhne checkout to include them",
+                live.len()
+            );
+            0
+        }
+    };
 
     if !diffs.is_empty() {
         panic!(
             "PARITY FAIL: {} divergence(s) across {} frozen fixture(s) and {} live skill(s):\n{}",
             diffs.len(),
             frozen.len(),
-            live.len(),
+            live_checked,
             diffs.join("\n"),
         );
     }
@@ -447,6 +467,6 @@ fn rust_validator_matches_go_golden_corpus() {
         "PARITY OK: {} frozen fixture(s) bit-exact (counts/enums/strings/token-counts exact; \
          4dp floats within {FLOAT_TOL:.0e}); {} live skill(s) satisfy the validator invariants.",
         frozen.len(),
-        live.len(),
+        live_checked,
     );
 }

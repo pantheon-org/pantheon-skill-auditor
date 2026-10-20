@@ -526,9 +526,15 @@ fn probes_validate_fails_on_a_bad_probe_file_and_score_on_a_missing_skill() {
     );
 }
 
+/// The committed probes live in pantheon-org/tekhne, so this runs only when
+/// `TEKHNE_ROOT` names a checkout of it (tekhne's own CI also runs
+/// `probes validate`).
 #[test]
 fn committed_probes_validate_against_the_repository() {
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let Some(repo) = std::env::var_os("TEKHNE_ROOT").map(std::path::PathBuf::from) else {
+        eprintln!("skipping: set TEKHNE_ROOT to a pantheon-org/tekhne checkout");
+        return;
+    };
     let out = run(&[
         "probes",
         "validate",
