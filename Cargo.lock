@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "ahdk-core"
 version = "0.0.0"
-source = "git+ssh://git@github.com/pantheon-org/agentic-harness-dev-kit.git?tag=v0.1.0-rc.1#8285ef632e785fe3dc2ad9723f270bd8bd19c734"
+source = "git+https://github.com/pantheon-org/agentic-harness-dev-kit.git?tag=v0.1.0-rc.1#8285ef632e785fe3dc2ad9723f270bd8bd19c734"
 dependencies = [
  "serde",
  "serde_json",
@@ -15,7 +15,7 @@ dependencies = [
 [[package]]
 name = "ahdk-install"
 version = "0.0.0"
-source = "git+ssh://git@github.com/pantheon-org/agentic-harness-dev-kit.git?tag=v0.1.0-rc.1#8285ef632e785fe3dc2ad9723f270bd8bd19c734"
+source = "git+https://github.com/pantheon-org/agentic-harness-dev-kit.git?tag=v0.1.0-rc.1#8285ef632e785fe3dc2ad9723f270bd8bd19c734"
 dependencies = [
  "ahdk-core",
 ]
