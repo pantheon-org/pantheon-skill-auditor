@@ -1,0 +1,49 @@
+name: Install pantheon-skill-auditor
+description: >
+  Install a pantheon-skill-auditor release (linux x86_64) and put it on PATH, so a
+  workflow can run `pantheon-skill-auditor validate`, `check`, `probes`,
+  `analyze`, `evaluate` or `batch`. The tarball is verified against a SHA-256
+  before it is extracted.
+
+inputs:
+  version:
+    description: Release version without the leading v, for example 0.3.1.
+    required: true
+  sha256:
+    description: >
+      Expected SHA-256 of the linux x86_64 tarball. Pin this in your workflow.
+      When empty, the digest published beside the release asset is used, which
+      checks the download but not the release itself.
+    required: false
+    default: ""
+  download-url:
+    description: >
+      Full URL of the linux x86_64 tarball, overriding the default release URL
+      of this repository (for example a release that predates it).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install pantheon-skill-auditor
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        SHA256: ${{ inputs.sha256 }}
+        DOWNLOAD_URL: ${{ inputs.download-url }}
+      run: |
+        set -euo pipefail
+        asset="pantheon-skill-auditor-x86_64-unknown-linux-gnu.tar.xz"
+        url="${DOWNLOAD_URL:-https://github.com/pantheon-org/pantheon-skill-auditor/releases/download/v${VERSION}/${asset}}"
+        dir="$RUNNER_TEMP/pantheon-skill-auditor"
+        mkdir -p "$dir"
+        curl -fsSL -o "$dir/$asset" "$url"
+        if [ -z "$SHA256" ]; then
+          SHA256="$(curl -fsSL "${url}.sha256" | awk '{print $1}')"
+        fi
+        echo "${SHA256}  $dir/$asset" | sha256sum -c -
+        tar -xJf "$dir/$asset" -C "$dir" --strip-components=1
+        test -x "$dir/pantheon-skill-auditor"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/pantheon-skill-auditor" version

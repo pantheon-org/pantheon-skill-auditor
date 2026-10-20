@@ -2,6 +2,9 @@
 //! `evaluate <skill>` and `batch <skill...>`, with `--json`, `--store`,
 //! `--repo-root` and (batch only) `--fail-below`.
 
+use ahdk_install::agents::all as all_agents;
+use ahdk_install::env::Environment;
+use ahdk_install::install::InstallMode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use skill_auditor::aggregation;
 use skill_auditor::baseline::{self, Comparison};
@@ -15,9 +18,6 @@ use skill_auditor::reporter;
 use skill_auditor::scorer::{self, grade_rank, Result as AuditResult};
 use skill_auditor::semantic;
 use skill_auditor::skill_bundle;
-use skill_install::agents::all as all_agents;
-use skill_install::env::Environment;
-use skill_install::install::InstallMode;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process;
