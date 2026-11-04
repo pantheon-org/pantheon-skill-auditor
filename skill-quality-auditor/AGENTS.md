@@ -123,7 +123,6 @@ Optional features for power users:
 skills/agentic-harness/skill-quality-auditor/
 ├── SKILL.md                                          # Navigation hub
 ├── AGENTS.md                                         # This file
-├── .tekhne/plugin.json                               # Toolkit manifest
 ├── evals/                                            # Eval scenarios
 ├── assets/
 │   ├── templates/
