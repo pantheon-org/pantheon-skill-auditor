@@ -44,8 +44,8 @@ Some golden-corpus tests score live skills from a
 unless `TEKHNE_ROOT` points at one; the frozen fixtures always run.
 
 The shared helpers come from
-[agentic-harness-dev-kit](https://github.com/pantheon-org/agentic-harness-dev-kit)
-(`ahdk-core`, `ahdk-install`), pinned to a git tag until they are published to crates.io.
+[pantheon-agentic-harness-dev-kit](https://github.com/pantheon-org/pantheon-agentic-harness-dev-kit)
+(`pahdk-core`, `pahdk-install`), pinned to a git tag until they are published to crates.io.
 
 ## History
 
