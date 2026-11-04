@@ -9,8 +9,8 @@
 
 use std::path::{Path, PathBuf};
 
-use ahdk_core::{Error, Result};
-use ahdk_install::{
+use pahdk_core::{Error, Result};
+use pahdk_install::{
     agents::{all, by_name, AgentConfig},
     env::Environment,
     install::{install_skill, resolve_target_dir, uninstall_skill, InstallMode},

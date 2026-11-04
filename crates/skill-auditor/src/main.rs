@@ -2,10 +2,10 @@
 //! `evaluate <skill>` and `batch <skill...>`, with `--json`, `--store`,
 //! `--repo-root` and (batch only) `--fail-below`.
 
-use ahdk_install::agents::all as all_agents;
-use ahdk_install::env::Environment;
-use ahdk_install::install::InstallMode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use pahdk_install::agents::all as all_agents;
+use pahdk_install::env::Environment;
+use pahdk_install::install::InstallMode;
 use skill_auditor::aggregation;
 use skill_auditor::baseline::{self, Comparison};
 use skill_auditor::check_stored;
