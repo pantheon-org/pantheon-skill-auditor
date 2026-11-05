@@ -1,0 +1,69 @@
+# pantheon-skill-auditor
+
+Rust command line tool (`pantheon-skill-auditor`) that scores agent skills on a 9-dimension quality framework and
+validates them offline, plus the bundled `skill-quality-auditor` agent skill. See `README.md` for what it does and
+how it is installed.
+
+## Layout
+
+- `crates/skill-validator-rs/`: the offline validator (structure, content, links, triggers, probes, listing budget).
+  The auditor consumes it, and the repository still builds it as a thin wrapper binary.
+- `crates/skill-auditor/`: the scorer, reporters and CLI. `src/lib.rs` documents the scoring path;
+  `src/scorer/` has one module per dimension (`d1_` to `d9_`). `tests/` holds the integration tests and
+  `tests/golden-corpus/`.
+- `skill-quality-auditor/`: the skill (`SKILL.md`, `AGENTS.md`, `references/`, `evals/`, `scripts/`, `assets/`).
+  `crates/skill-auditor/build.rs` embeds it in the binary, so a change here changes the binary.
+- `action.yml`: composite action that installs a released binary, verified against a SHA-256.
+- `.github/workflows/`: CI. `rust-ci.yml` is the source of truth for what must pass. `audit-skill.yml` audits the
+  skill with a released binary, installed through `action.yml`.
+- `.context/`: gitignored working state. Never commit it.
+
+## Commands
+
+Tools are pinned in `mise.toml` (`mise install` sets them up and installs the git hooks).
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo build --workspace --locked
+cargo test --workspace --locked
+mise run lint        # markdown, via rumdl
+mise run check       # every hk check, the same steps as the git hooks
+```
+
+Run `cargo` with `--locked`: CI does. When checking test results, require `0 failed` on every suite; do not add up
+the "passed" counts.
+
+## Golden-corpus tests
+
+- `crates/skill-auditor/tests/golden-corpus/goldens.json` is the regression baseline for grades and dimension scores.
+  A change that moves a score fails `grade_parity`.
+- Regenerate it only when the scoring change is intended, and review the diff before committing:
+
+```bash
+BLESS_GOLDENS=1 cargo test -p pantheon-skill-auditor --test grade_parity
+```
+
+- Some live-skill entries are skipped unless `TEKHNE_ROOT` points at a `pantheon-org/tekhne` checkout. The frozen
+  fixtures always run.
+- A new scorer can change grades in consuming repositories, so say so in the PR and expect them to refresh their
+  stored audits when they bump the pin.
+
+## Conventions
+
+- Branch off `main`, never commit to it. Conventional commits with a scope, for example `fix(scorer): count an empty
+  section once`; the squash-merge subject ends in the PR number.
+- PR bodies use the three headings in `.github/pull_request_template.md`: What, Why, Notes.
+- Git hooks run through `hk` (`hk.pkl`): rustfmt, rumdl, yamllint and shellcheck on commit; clippy and tests on push.
+  Do not skip them.
+- Markdown is linted by rumdl with `.rumdl.toml`. Shell scripts must pass shellcheck.
+- The Rust toolchain version is set in `rust-toolchain.toml`, `mise.toml` and `rust-ci.yml`. Change all three together.
+- The `pahdk-*` dependencies are pinned in the root `Cargo.toml`, to a git tag. Both must share one pin.
+- A workflow `run:` block holds at most 15 lines of code; longer logic goes in a script under `.github/scripts/`.
+- `validate` and `check` exit 0 clean, 1 error, 2 warnings only, 3 usage error. Keep those codes; workflows depend
+  on them.
+- The scoring path is a pure function of on-disk content: no LLM and no network access.
+- State is stored under `$XDG_DATA_HOME/tekhne/skill-auditor` (or `~/.local/share/tekhne/skill-auditor`). Keep that
+  path.
+- This repository audits its own skill with a released binary. Until it has its own release, `audit-skill.yml` uses
+  the bootstrap binary from the tekhne `v0.3.0` tool release.
