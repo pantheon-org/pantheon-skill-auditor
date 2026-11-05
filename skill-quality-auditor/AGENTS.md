@@ -4,7 +4,7 @@ This skill provides automated quality evaluation and maintenance for your skill 
 
 ## Overview
 
-**Total Files**: 25 reference files + 1 script + 2 templates + 2 schemas + 1 requirements spec
+**Total Files**: 25 reference files + 1 template + 2 schemas
 **Categories**: 7 (Framework, Duplication, Aggregation, Remediation, Scripts, Reporting, Advanced)
 **Pattern**: Navigation Hub (SKILL.md) + Expert References
 **Origin**: Consolidates skill-quality-auditor + skill-aggregation-pattern + skill-quality-auditor
@@ -90,7 +90,7 @@ Automation tools for quality enforcement:
 | `scripts-ci-integration.md` | GitHub Actions, GitLab CI | ~310 | Setting up automation |
 | `examples-audit-workflows.md` | Input/output pairs and workflow examples | ~200 | Learning by example |
 
-**Commands**: the `pantheon-skill-auditor` CLI. The only bundled script is `scripts/validate-review-format.sh`, which has no CLI equivalent.
+**Commands**: the `pantheon-skill-auditor` CLI. The skill bundles no scripts.
 
 ### Reporting (MEDIUM Priority)
 
@@ -123,41 +123,36 @@ skills/agentic-harness/skill-quality-auditor/
 ├── evals/                                            # Eval scenarios
 ├── assets/
 │   ├── templates/
-│   │   ├── review-report-template.yaml               # Audit report format
 │   │   └── remediation-plan-template.yaml            # Remediation plan format
-│   ├── schemas/
-│   │   ├── review-report.schema.json                 # JSON Schema for review reports
-│   │   └── remediation-plan.schema.json              # JSON Schema for plan validation
-│   └── requirements/
-│       └── review-report.requirements.json           # Custom validation spec for reports
-├── references/
-│   ├── framework-dimensions.md           # CRITICAL
-│   ├── framework-dimensions.md            # CRITICAL
-│   ├── framework-scoring-rubric.md                   # CRITICAL
-│   ├── framework-quality-standards.md                # CRITICAL
-│   ├── scoring-rubric.md                             # CRITICAL
-│   ├── skill-template.md                             # CRITICAL
-│   ├── quality-thresholds-scoring.md                 # HIGH
-│   ├── detailed-anti-patterns.md                     # HIGH
-│   ├── dimension-analysis-template.md                # HIGH
-│   ├── skill-taxonomy.md                             # HIGH
-│   ├── duplication-detection-algorithm.md            # HIGH
-│   ├── duplication-remediation.md                    # HIGH
-│   ├── aggregation-pattern.md                        # HIGH
-│   ├── aggregation-implementation.md                 # HIGH
-│   ├── remediation-planning.md                       # HIGH
-│   ├── advanced-pattern-recognition.md               # MEDIUM
-│   ├── scripts-audit-workflow.md                     # MEDIUM
-│   ├── scripts-ci-integration.md                     # MEDIUM
-│   ├── examples-audit-workflows.md                   # MEDIUM
-│   ├── reporting-analysis.md                         # MEDIUM
-│   ├── reporting-dashboards.md                       # MEDIUM
-│   ├── advanced-trends-analysis.md                   # LOW
-│   └── advanced-custom-metrics.md                    # LOW
-└── scripts/
-    └── validate-review-format.sh                     # Review report validator
+│   └── schemas/
+│       ├── criteria.schema.json                      # JSON Schema for eval criteria
+│       └── remediation-plan.schema.json              # JSON Schema for plan validation
+└── references/
+    ├── framework-dimensions.md           # CRITICAL
+    ├── framework-dimensions.md            # CRITICAL
+    ├── framework-scoring-rubric.md                   # CRITICAL
+    ├── framework-quality-standards.md                # CRITICAL
+    ├── scoring-rubric.md                             # CRITICAL
+    ├── skill-template.md                             # CRITICAL
+    ├── quality-thresholds-scoring.md                 # HIGH
+    ├── detailed-anti-patterns.md                     # HIGH
+    ├── dimension-analysis-template.md                # HIGH
+    ├── skill-taxonomy.md                             # HIGH
+    ├── duplication-detection-algorithm.md            # HIGH
+    ├── duplication-remediation.md                    # HIGH
+    ├── aggregation-pattern.md                        # HIGH
+    ├── aggregation-implementation.md                 # HIGH
+    ├── remediation-planning.md                       # HIGH
+    ├── advanced-pattern-recognition.md               # MEDIUM
+    ├── scripts-audit-workflow.md                     # MEDIUM
+    ├── scripts-ci-integration.md                     # MEDIUM
+    ├── examples-audit-workflows.md                   # MEDIUM
+    ├── reporting-analysis.md                         # MEDIUM
+    ├── reporting-dashboards.md                       # MEDIUM
+    ├── advanced-trends-analysis.md                   # LOW
+    └── advanced-custom-metrics.md                    # LOW
 
-Total: 25 references + 1 script + 2 templates + 2 schemas + 1 requirements spec
+Total: 25 references + 1 template + 2 schemas
 ```
 
 ## Navigation Workflow

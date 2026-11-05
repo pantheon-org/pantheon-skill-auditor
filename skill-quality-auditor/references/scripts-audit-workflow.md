@@ -235,21 +235,16 @@ jobs:
           skill-auditor batch $(git diff --name-only origin/main | grep "skills/.*/SKILL.md" | sed 's|skills/||;s|/SKILL.md||' | tr '\n' ' ') --fail-below B
 ```
 
-## Single-Skill Report Format
+## Stored Audit Output
 
-Audit reports in `.context/audits/*.md` must follow the frontmatter-first format:
+`evaluate --store` and `batch --store` write each audit next to the skill it scored, in
+`skills/<domain>/<skill>/.audits/<date>/`:
 
-```yaml
-review_date: YYYY-MM-DD
-reviewer: automated audit
-skill_location: `skills/<skill-name>/SKILL.md`
-```
+- `audit.json`: the scores, grade and findings, for tools and `check-stored`
+- `Analysis.md`: the dimension-by-dimension write-up
+- `Remediation.md`: the plan to raise the grade
 
-Use `templates/review-report-template.yaml` as the canonical format source, then validate generated reports with:
-
-```bash
-./scripts/validate-review-format.sh .context/audits/<skill>-YYYY-MM-DD.md
-```
+There is no separate review-report format to follow or validate.
 
 ## Report Interpretation
 
