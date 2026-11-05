@@ -231,7 +231,7 @@ report_template_markdown: |
   ```bash
   skill-auditor evaluate [skill-name] --json
   skill-auditor batch [skill1] [skill2] --store
-  ./scripts/detect-duplication.sh skills
+  pantheon-skill-auditor duplication skills
   ./scripts/validate-review-format.sh .context/audits/[report-file].md
   ```
 

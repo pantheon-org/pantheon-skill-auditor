@@ -137,7 +137,7 @@ For each high-duplication pair:
 
 ```bash
 # Re-run duplication detection
-./scripts/detect-duplication.sh
+pantheon-skill-auditor duplication skills
 
 # Verify no broken references
 grep -r "@see" skills/*/SKILL.md | while read ref; do

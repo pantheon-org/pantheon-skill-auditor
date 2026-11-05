@@ -70,8 +70,9 @@ jobs:
 
       - name: Check for duplication
         run: |
-          ./scripts/detect-duplication.sh
-          if grep -q "Critical" .context/analysis/duplication-report-*.md; then
+          mkdir -p .context/analysis
+          pantheon-skill-auditor duplication skills > .context/analysis/duplication-report.md
+          if grep -qi "critical" .context/analysis/duplication-report.md; then
             echo "::warning::Critical duplication detected"
           fi
 
@@ -123,7 +124,7 @@ jobs:
         run: |
           skills=$(find skills -name "SKILL.md" | sed 's|skills/||;s|/SKILL.md||' | tr '\n' ' ')
           skill-auditor batch $skills --store
-          ./scripts/detect-duplication.sh
+          pantheon-skill-auditor duplication skills
 
       - name: Create issue if critical issues found
         run: |
@@ -163,7 +164,7 @@ skill-quality:
         skill=$(echo "$file" | sed 's|skills/||;s|/SKILL.md||')
         skill-auditor evaluate "$skill" --json --store
       done
-    - ./scripts/detect-duplication.sh
+    - pantheon-skill-auditor duplication skills
   artifacts:
     paths:
       - .context/analysis/
@@ -182,7 +183,7 @@ weekly-skill-audit:
     - bun install && bun run build:skill-auditor
     - skills=$(find skills -name "SKILL.md" | sed 's|skills/||;s|/SKILL.md||' | tr '\n' ' ')
     - skill-auditor batch $skills --store
-    - ./scripts/detect-duplication.sh
+    - pantheon-skill-auditor duplication skills
   artifacts:
     paths:
       - .context/analysis/
@@ -233,7 +234,7 @@ pipeline {
     
     stage('Duplication Check') {
       steps {
-        sh './scripts/detect-duplication.sh'
+        sh 'pantheon-skill-auditor duplication skills'
       }
     }
   }

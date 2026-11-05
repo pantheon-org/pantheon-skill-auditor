@@ -159,7 +159,7 @@ Not all similarity indicates duplication:
 ### Manual Detection
 
 ```bash
-./scripts/detect-duplication.sh
+pantheon-skill-auditor duplication skills
 ```
 
 ### Scheduled Detection

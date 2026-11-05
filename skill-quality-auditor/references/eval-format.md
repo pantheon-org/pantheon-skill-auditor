@@ -82,7 +82,7 @@ must not show.
 - An older `pantheon-skill-auditor` build ignores the field and reads the item
   as worth 0, so a file that uses it is still accepted and sums as before.
 
-The schema is `assets/schemas/criteria.schema.json`. `scripts/validate-skill-artifacts.sh`
+The schema is `assets/schemas/criteria.schema.json`. `pantheon-skill-auditor validate artifacts`
 checks the `failure_check` rules for every `criteria.json` under `skills/`.
 
 ## scenario-N/capability.txt

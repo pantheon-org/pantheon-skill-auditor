@@ -51,6 +51,6 @@
   "recommended_commands": [
     "skill-auditor evaluate",
     "skill-auditor batch",
-    "./scripts/detect-duplication.sh"
+    "skill-auditor duplication"
   ]
 }

@@ -37,7 +37,7 @@ ls -1 .agents/skills/ | grep "^bdd-"
 # Output: bdd-collaboration, bdd-gherkin, bdd-patterns, bdd-principles, bdd-scenarios
 
 # Check for duplication
-./scripts/detect-duplication.sh
+pantheon-skill-auditor duplication skills
 # Look for >20% similarity pairs
 
 # Measure sizes
