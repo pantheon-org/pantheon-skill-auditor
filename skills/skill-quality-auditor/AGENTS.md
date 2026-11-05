@@ -117,7 +117,7 @@ Optional features for power users:
 ## Complete File Listing
 
 ```text
-skills/agentic-harness/skill-quality-auditor/
+skills/skill-quality-auditor/
 ├── SKILL.md                                          # Navigation hub
 ├── AGENTS.md                                         # This file
 ├── evals/                                            # Eval scenarios
