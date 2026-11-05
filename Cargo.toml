@@ -19,6 +19,7 @@ tiktoken-rs = "0.12"
 regex = "1"
 serde_yaml_ng = "0.10"
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 skill-validator-rs = { path = "crates/skill-validator-rs" }
 # The shared Pantheon Agentic Harness Dev Kit crates. A git tag until they are published
 # to crates.io; the tag is immutable, so bump it deliberately.

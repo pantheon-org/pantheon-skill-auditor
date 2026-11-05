@@ -31,6 +31,16 @@ Until this repository has its own release, the latest is
 - run: pantheon-skill-auditor validate structure --allow-dirs=evals path/to/skill
 ```
 
+## Shell completion
+
+`pantheon-skill-auditor completion <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell` or
+`elvish`. The validator commands (`validate`, `check`, `probes`, `analyze`) pass their arguments through to the embedded validator, so completion offers the command names but not their flags.
+
+```bash
+pantheon-skill-auditor completion zsh > "${fpath[1]}/_pantheon-skill-auditor"
+pantheon-skill-auditor completion bash > /etc/bash_completion.d/pantheon-skill-auditor
+```
+
 ## Development
 
 ```bash
