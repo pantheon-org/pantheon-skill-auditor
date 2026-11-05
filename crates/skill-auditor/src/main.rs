@@ -2,7 +2,8 @@
 //! `evaluate <skill>` and `batch <skill...>`, with `--json`, `--store`,
 //! `--repo-root` and (batch only) `--fail-below`.
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::{generate, Shell};
 use pahdk_install::agents::all as all_agents;
 use pahdk_install::env::Environment;
 use pahdk_install::install::InstallMode;
@@ -73,6 +74,11 @@ enum Command {
     Analyze {
         #[arg(num_args = 0.., allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<OsString>,
+    },
+    /// Print a shell completion script for `pantheon-skill-auditor`.
+    Completion {
+        /// The shell to generate for.
+        shell: Shell,
     },
     /// Evaluate a single skill.
     Evaluate {
@@ -318,6 +324,11 @@ fn main() {
         Command::Analyze { args } => process::exit(run_validator("analyze", args)),
         Command::Version => {
             println!("{NAME} v{VERSION}");
+            Ok(())
+        }
+        Command::Completion { shell } => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, NAME, &mut std::io::stdout());
             Ok(())
         }
         Command::Evaluate {
@@ -1225,6 +1236,61 @@ fn find_repo_root(dir: &Path) -> std::io::Result<PathBuf> {
                     format!("no .git or go.mod found above {}", dir.display()),
                 ))
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_cli_definition_is_internally_consistent() {
+        // clap's own audit: duplicate flags, conflicting names, bad defaults.
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn completion_generates_for_every_supported_shell() {
+        for shell in [
+            Shell::Bash,
+            Shell::Zsh,
+            Shell::Fish,
+            Shell::PowerShell,
+            Shell::Elvish,
+        ] {
+            let mut out = Vec::new();
+            generate(shell, &mut Cli::command(), NAME, &mut out);
+            let script = String::from_utf8(out).expect("completion scripts are UTF-8");
+            assert!(
+                script.contains(NAME),
+                "{shell} script should name the binary"
+            );
+        }
+    }
+
+    #[test]
+    fn the_completion_script_covers_every_subcommand() {
+        let mut out = Vec::new();
+        generate(Shell::Bash, &mut Cli::command(), NAME, &mut out);
+        let script = String::from_utf8(out).expect("utf-8");
+
+        for visible in [
+            "version",
+            "validate",
+            "check",
+            "probes",
+            "analyze",
+            "evaluate",
+            "batch",
+            "check-stored",
+            "skill",
+            "completion",
+        ] {
+            assert!(
+                script.contains(visible),
+                "bash completion should offer {visible}"
+            );
         }
     }
 }
