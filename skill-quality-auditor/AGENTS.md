@@ -4,7 +4,7 @@ This skill provides automated quality evaluation and maintenance for your skill 
 
 ## Overview
 
-**Total Files**: 25 reference files + 17 scripts + 2 templates + 2 schemas + 1 requirements spec
+**Total Files**: 25 reference files + 1 template + 2 schemas
 **Categories**: 7 (Framework, Duplication, Aggregation, Remediation, Scripts, Reporting, Advanced)
 **Pattern**: Navigation Hub (SKILL.md) + Expert References
 **Origin**: Consolidates skill-quality-auditor + skill-aggregation-pattern + skill-quality-auditor
@@ -74,14 +74,11 @@ Create actionable improvement plans from audit results:
 **Usage**:
 
 ```bash
-# Generate plan from audit
-./scripts/generate-remediation-plan.sh <skill-name> [target-score]
-
-# Validate plan against schema
-./scripts/validate-remediation-plan.sh .context/plans/<skill>-remediation-plan.md
+# Store an audit; this also writes the remediation plan next to the skill
+pantheon-skill-auditor evaluate <domain>/<skill-name> --store
 ```
 
-**Output**: `.context/plans/<skill-name>-remediation-plan.md`
+**Output**: `skills/<domain>/<skill-name>/.audits/<date>/Remediation.md`, beside `Analysis.md` and `audit.json`
 
 ### Scripts (MEDIUM Priority)
 
@@ -93,7 +90,7 @@ Automation tools for quality enforcement:
 | `scripts-ci-integration.md` | GitHub Actions, GitLab CI | ~310 | Setting up automation |
 | `examples-audit-workflows.md` | Input/output pairs and workflow examples | ~200 | Learning by example |
 
-**Executable scripts**: See `scripts/` directory
+**Commands**: the `pantheon-skill-auditor` CLI. The skill bundles no scripts.
 
 ### Reporting (MEDIUM Priority)
 
@@ -126,55 +123,36 @@ skills/agentic-harness/skill-quality-auditor/
 ├── evals/                                            # Eval scenarios
 ├── assets/
 │   ├── templates/
-│   │   ├── review-report-template.yaml               # Audit report format
 │   │   └── remediation-plan-template.yaml            # Remediation plan format
-│   ├── schemas/
-│   │   ├── review-report.schema.json                 # JSON Schema for review reports
-│   │   └── remediation-plan.schema.json              # JSON Schema for plan validation
-│   └── requirements/
-│       └── review-report.requirements.json           # Custom validation spec for reports
-├── references/
-│   ├── framework-dimensions.md           # CRITICAL
-│   ├── framework-dimensions.md            # CRITICAL
-│   ├── framework-scoring-rubric.md                   # CRITICAL
-│   ├── framework-quality-standards.md                # CRITICAL
-│   ├── scoring-rubric.md                             # CRITICAL
-│   ├── skill-template.md                             # CRITICAL
-│   ├── quality-thresholds-scoring.md                 # HIGH
-│   ├── detailed-anti-patterns.md                     # HIGH
-│   ├── dimension-analysis-template.md                # HIGH
-│   ├── skill-taxonomy.md                             # HIGH
-│   ├── duplication-detection-algorithm.md            # HIGH
-│   ├── duplication-remediation.md                    # HIGH
-│   ├── aggregation-pattern.md                        # HIGH
-│   ├── aggregation-implementation.md                 # HIGH
-│   ├── remediation-planning.md                       # HIGH
-│   ├── advanced-pattern-recognition.md               # MEDIUM
-│   ├── scripts-audit-workflow.md                     # MEDIUM
-│   ├── scripts-ci-integration.md                     # MEDIUM
-│   ├── examples-audit-workflows.md                   # MEDIUM
-│   ├── reporting-analysis.md                         # MEDIUM
-│   ├── reporting-dashboards.md                       # MEDIUM
-│   ├── advanced-trends-analysis.md                   # LOW
-│   └── advanced-custom-metrics.md                    # LOW
-└── scripts/
-    ├── evaluate.sh                                   # Shell fallback evaluator (use skill-auditor binary)
-    ├── audit-skills.sh                               # Shell fallback for full collection audit
-    ├── audit-per-skill.sh                            # Per-skill audit runner
-    ├── batch-audit.sh                                # Shell fallback for batch audits
-    ├── detect-duplication.sh                         # Duplication finder
-    ├── detect-duplication-enhanced.sh                # Enhanced duplication detection
-    ├── generate-remediation-plan.sh                  # Remediation plan generator
-    ├── validate-remediation-plan.sh                  # Plan schema validator
-    ├── validate-review-format.sh                     # Review report validator
-    ├── validate-skill-artifacts.sh                   # Artifact convention validator
-    ├── pattern-recognition-pipeline.sh              # Pattern analysis pipeline
-    ├── ml-pattern-detection.sh                       # ML-based pattern detection
-    ├── semantic-analysis.sh                          # Semantic content analysis
-    ├── plan-aggregation.sh                           # Aggregation planner
-    └── prune-audits.sh                               # Audit output cleanup
+│   └── schemas/
+│       ├── criteria.schema.json                      # JSON Schema for eval criteria
+│       └── remediation-plan.schema.json              # JSON Schema for plan validation
+└── references/
+    ├── framework-dimensions.md           # CRITICAL
+    ├── framework-dimensions.md            # CRITICAL
+    ├── framework-scoring-rubric.md                   # CRITICAL
+    ├── framework-quality-standards.md                # CRITICAL
+    ├── scoring-rubric.md                             # CRITICAL
+    ├── skill-template.md                             # CRITICAL
+    ├── quality-thresholds-scoring.md                 # HIGH
+    ├── detailed-anti-patterns.md                     # HIGH
+    ├── dimension-analysis-template.md                # HIGH
+    ├── skill-taxonomy.md                             # HIGH
+    ├── duplication-detection-algorithm.md            # HIGH
+    ├── duplication-remediation.md                    # HIGH
+    ├── aggregation-pattern.md                        # HIGH
+    ├── aggregation-implementation.md                 # HIGH
+    ├── remediation-planning.md                       # HIGH
+    ├── advanced-pattern-recognition.md               # MEDIUM
+    ├── scripts-audit-workflow.md                     # MEDIUM
+    ├── scripts-ci-integration.md                     # MEDIUM
+    ├── examples-audit-workflows.md                   # MEDIUM
+    ├── reporting-analysis.md                         # MEDIUM
+    ├── reporting-dashboards.md                       # MEDIUM
+    ├── advanced-trends-analysis.md                   # LOW
+    └── advanced-custom-metrics.md                    # LOW
 
-Total: 25 references + 17 scripts + 2 templates + 2 schemas + 1 requirements spec
+Total: 25 references + 1 template + 2 schemas
 ```
 
 ## Navigation Workflow
@@ -189,7 +167,7 @@ Total: 25 references + 17 scripts + 2 templates + 2 schemas + 1 requirements spe
 
 ### For Duplication Detection
 
-1. Run `./scripts/detect-duplication.sh`
+1. Run `pantheon-skill-auditor duplication skills`
 2. Review generated report
 3. Load `duplication-remediation.md` for fixes
 4. Load `aggregation-pattern.md` if >20% similarity

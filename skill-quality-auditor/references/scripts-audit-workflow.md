@@ -83,22 +83,24 @@ pantheon-skill-auditor batch <skill1> <skill2> --repo-root <checkout> --base ori
 - **Output:** with `--json`, `evaluate` prints one comparison record and `batch` an array. Each record has `schema_version` (1), `base` (`ref`, `sha`), `skill`, `status` (`new`, `changed` or `unchanged`), `baseline`, `current`, `delta` and `dimension_deltas`. Without `--base` the output is unchanged.
 - **Grades:** `--base` never changes a score. `--fail-below` still gates the current result.
 
-### Duplication detection (shell helper)
+### Duplication detection
 
 ```bash
-./scripts/detect-duplication.sh [skills-dir]
+pantheon-skill-auditor duplication [skills-dir] [--enhanced] [--threshold <percent>] [--json]
 ```
 
 **Arguments:**
 
 - `skills-dir` - Skills directory (default: `skills`)
+- `--enhanced` - Composite semantic, structural and lexical similarity instead of line overlap
+- `--threshold` - Only report pairs at or above this similarity (default: 20)
 
-**Output:** `duplication-report-YYYY-MM-DD.md`
+**Output:** a Markdown report on stdout, or JSON with `--json`. Redirect it to keep it.
 
 ### Aggregation planning
 
 ```bash
-bun run scripts/plan-aggregation.ts --family <prefix>
+pantheon-skill-auditor plan-aggregation --family <prefix> [--skills-dir <dir>]
 ```
 
 **Options:**
@@ -136,19 +138,20 @@ cat .context/audits/*/$(date +%Y-%m-%d)/audit.json | jq '.grade'
 
 ```bash
 # Detect duplication
-./scripts/detect-duplication.sh
+mkdir -p .context/analysis
+pantheon-skill-auditor duplication skills > .context/analysis/duplication-report.md
 
 # Review high-priority pairs
-grep -A5 "High-Priority" .context/analysis/duplication-report-*.md
+grep -A5 "High" .context/analysis/duplication-report.md
 ```
 
 ### Phase 4: Aggregation Planning
 
 ```bash
 # Plan aggregation for each family
-bun run scripts/plan-aggregation.ts --family bdd
-bun run scripts/plan-aggregation.ts --family typescript
-bun run scripts/plan-aggregation.ts --family bun
+pantheon-skill-auditor plan-aggregation --family bdd
+pantheon-skill-auditor plan-aggregation --family typescript
+pantheon-skill-auditor plan-aggregation --family bun
 ```
 
 ### Phase 5: Generate Summary
@@ -200,7 +203,7 @@ jobs:
         run: |
           skills=$(find skills -name "SKILL.md" | sed 's|skills/||;s|/SKILL.md||' | tr '\n' ' ')
           skill-auditor batch $skills --store
-      - run: ./scripts/detect-duplication.sh
+      - run: pantheon-skill-auditor duplication skills
       - uses: actions/upload-artifact@v4
         with:
           name: audit-reports
@@ -232,21 +235,16 @@ jobs:
           skill-auditor batch $(git diff --name-only origin/main | grep "skills/.*/SKILL.md" | sed 's|skills/||;s|/SKILL.md||' | tr '\n' ' ') --fail-below B
 ```
 
-## Single-Skill Report Format
+## Stored Audit Output
 
-Audit reports in `.context/audits/*.md` must follow the frontmatter-first format:
+`evaluate --store` and `batch --store` write each audit next to the skill it scored, in
+`skills/<domain>/<skill>/.audits/<date>/`:
 
-```yaml
-review_date: YYYY-MM-DD
-reviewer: automated audit
-skill_location: `skills/<skill-name>/SKILL.md`
-```
+- `audit.json`: the scores, grade and findings, for tools and `check-stored`
+- `Analysis.md`: the dimension-by-dimension write-up
+- `Remediation.md`: the plan to raise the grade
 
-Use `templates/review-report-template.yaml` as the canonical format source, then validate generated reports with:
-
-```bash
-././scripts/validate-review-format.sh .context/audits/<skill>-YYYY-MM-DD.md
-```
+There is no separate review-report format to follow or validate.
 
 ## Report Interpretation
 

@@ -125,7 +125,7 @@ Advanced pattern recognition now uses **multi-layered algorithmic analysis** bey
 **Implementation:**
 ```bash
 # Enhanced duplication detection with semantic analysis
-./scripts/detect-duplication-enhanced.sh skills/
+pantheon-skill-auditor duplication skills --enhanced
 
 # Outputs: Critical (≥50%), High (≥30%), Moderate (20-30%)
 # Features: ROI analysis, complexity estimation, remediation planning
@@ -147,10 +147,10 @@ Advanced pattern recognition now uses **multi-layered algorithmic analysis** bey
 **Implementation:**
 ```bash
 # Advanced semantic similarity analysis
-./scripts/semantic-analysis.sh skills/
+pantheon-skill-auditor semantic-analysis skills
 
-# Features: Topic clustering, intent matching, vocabulary richness analysis
-# Confidence levels: High (≥0.75), Medium (≥0.50), Low (<0.50)
+# Scores each pair of skills on concept, vocabulary, topic and intent overlap.
+# Pairs at or above 25% are listed; 45% and above are flagged as high overlap.
 ```
 
 **Semantic Categories:**
@@ -168,11 +168,11 @@ Advanced pattern recognition now uses **multi-layered algorithmic analysis** bey
 
 **Implementation:**
 ```bash
-# ML-based quality pattern detection
-./scripts/ml-pattern-detection.sh skills/
+# Heuristic quality signals: a deterministic weighted score per skill
+pantheon-skill-auditor quality-signals skills
 
-# Outputs: Predicted scores, confidence intervals, improvement recommendations
-# Model accuracy: 92.3% precision, 89.7% recall, 94.1% F1-score
+# Outputs: structural, content and quality percentages per skill, a class,
+# and a repository grade. No model is involved, so there are no accuracy figures.
 ```
 
 **Quality Classifications:**
@@ -186,16 +186,16 @@ Advanced pattern recognition now uses **multi-layered algorithmic analysis** bey
 **Integrated Analysis Pipeline:**
 ```bash
 # 1. Enhanced duplication detection
-./scripts/detect-duplication-enhanced.sh skills/ > .context/analysis/duplications.md
+pantheon-skill-auditor duplication skills --enhanced > .context/analysis/duplications.md
 
 # 2. Semantic similarity analysis
-./scripts/semantic-analysis.sh skills/ > .context/analysis/semantic.md
+pantheon-skill-auditor semantic-analysis skills > .context/analysis/semantic.md
 
-# 3. ML quality predictions
-./scripts/ml-pattern-detection.sh skills/ > .context/analysis/ml-quality.md
+# 3. Quality signals
+pantheon-skill-auditor quality-signals skills > .context/analysis/quality-signals.md
 
-# 4. Combined remediation planning
-./scripts/generate-remediation-plan.sh --all-algorithms
+# 4. All three at once, with a combined repository health score
+pantheon-skill-auditor pattern-analysis skills
 ```
 
 **Algorithm Integration Benefits:**
