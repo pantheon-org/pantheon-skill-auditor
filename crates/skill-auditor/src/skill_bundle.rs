@@ -1,7 +1,7 @@
 //! The companion skill embedded into the binary at build time.
 //!
 //! The `build.rs` script bakes the canonical
-//! `skills/agentic-harness/skill-quality-auditor` tree into the binary as a
+//! `skills/skill-quality-auditor` tree into the binary as a
 //! table of `(relative-path, bytes)` entries. This module exposes that table
 //! and materialises it onto disk so a downloaded binary can install the skill
 //! on a machine that has no copy of the repository.

@@ -61,5 +61,5 @@ The shared helpers come from
 
 Extracted from [pantheon-org/tekhne](https://github.com/pantheon-org/tekhne) with
 `git filter-repo` (`crates/skill-validator-rs`, `crates/skill-auditor` and
-`skills/agentic-harness/skill-quality-auditor`, now `skill-quality-auditor/`). Commit messages keep
+`skills/agentic-harness/skill-quality-auditor`, now `skills/skill-quality-auditor/`). Commit messages keep
 their original `#NNN` references, which point at tekhne pull requests.

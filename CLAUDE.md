@@ -11,7 +11,7 @@ how it is installed.
 - `crates/skill-auditor/`: the scorer, reporters and CLI. `src/lib.rs` documents the scoring path;
   `src/scorer/` has one module per dimension (`d1_` to `d9_`). `tests/` holds the integration tests and
   `tests/golden-corpus/`.
-- `skill-quality-auditor/`: the skill (`SKILL.md`, `AGENTS.md`, `references/`, `evals/`, `scripts/`, `assets/`).
+- `skills/skill-quality-auditor/`: the skill (`SKILL.md`, `AGENTS.md`, `references/`, `evals/`, `assets/`).
   `crates/skill-auditor/build.rs` embeds it in the binary, so a change here changes the binary.
 - `action.yml`: composite action that installs a released binary, verified against a SHA-256.
 - `.github/workflows/`: CI. `rust-ci.yml` is the source of truth for what must pass. `audit-skill.yml` audits the

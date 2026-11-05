@@ -1,7 +1,7 @@
 //! Build script that embeds the canonical companion skill tree into the
 //! binary so a downloaded `skill-auditor` is self-contained.
 //!
-//! It walks the canonical `skill-quality-auditor/` directory at the repository root (never a
+//! It walks the canonical `skills/skill-quality-auditor/` directory (never a
 //! copy committed inside this crate) and generates `$OUT_DIR/embedded_skill.rs`, a table of
 //! `(relative-path, &'static [u8])` entries backed by `include_bytes!`. The
 //! bytes are baked in at compile time, so no repository is needed at runtime.
@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     // The canonical, single-source-of-truth skill lives two levels up in
-    // `skill-quality-auditor/`. We embed from there rather than duplicating the tree.
+    // `skills/skill-quality-auditor/`. We embed from there rather than duplicating the tree.
     let skill_root = manifest_dir
-        .join("../../skill-quality-auditor")
+        .join("../../skills/skill-quality-auditor")
         .canonicalize()
         .expect("canonical skill directory must exist at build time");
 
