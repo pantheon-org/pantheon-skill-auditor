@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "3f5e7ffc6df43b957e0274052635b13f6be14f57",
+  "include-component-in-tag": false,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "skip-github-release": true,
+  "packages": {
+    "crates/skill-auditor": {
+      "release-type": "rust",
+      "package-name": "pantheon-skill-auditor",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/Cargo.lock",
+          "jsonpath": "$.package[?(@.name=='pantheon-skill-auditor')].version"
+        }
+      ]
+    }
+  }
+}
