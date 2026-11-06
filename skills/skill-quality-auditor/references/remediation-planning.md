@@ -1,126 +1,25 @@
 # Remediation Planning Guide
 
-Guide for creating remediation plans from skill quality audit results.
+Guide for acting on the remediation output of a skill quality audit.
 
-## When to Use This Guide
+## The Loop
 
-Use this guide when:
+`Remediation.md` is a view of `audit.json`, written by `evaluate --store`. It is not a plan you write, and no tool reads it back.
 
-- A skill has been audited and scored below target (typically <108/120, grade B or lower)
-- You need to create an actionable plan to improve skill quality
-- Converting audit findings into structured improvement tasks
-
-## Prerequisites
-
-1. **Completed Audit**: Run `skill-auditor evaluate <skill-name> --json`
-2. **Audit Report**: Location should be `.context/audits/<skill-name>-audit-YYYY-MM-DD.md`
-3. **Template**: Load `templates/remediation-plan-template.yaml`
-
-## Standard Remediation Plan Format
-
-All remediation plans follow this structure:
-
-### Executive Summary
-
-| Field | Description |
-|-------|-------------|
-| Current Score | Actual score from audit (e.g., 84/120, 70%) |
-| Target Score | Desired score (typically +15-20 points) |
-| Current/Target Grade | Letter grade (F/D/C/B/A) |
-| Priority | Critical/High/Medium/Low |
-| Effort | S/M/L estimate |
-
-**Focus Areas**: Top 2-3 dimensions requiring attention
-
-**Verdict**: One-line summary: "Priority improvements required" vs "Targeted improvements recommended"
-
-### Critical Issues Table
-
-Identify the top 3-5 issues from the audit:
-
-| Issue | Dimension | Severity | Impact |
-|-------|-----------|----------|--------|
-| Description | D# (score/max) | Critical/High/Medium/Low | Why this matters |
-
-Prioritize by:
-
-1. Critical/High severity
-2. Dimensions with lowest scores
-3. Issues blocking other improvements
-
-### Detailed Remediation Steps
-
-For each priority dimension:
-
-```
-### Phase N: [Dimension Name] - Priority: [Priority]
-
-**Target**: Increase from [current]/[max] to [target]/[max] (+[delta] points)
-
-#### Step N.1: [Specific Action]
-
-**[File to modify]**: `path/to/file.md`
-
-[Code example if applicable]
+```bash
+pantheon-skill-auditor evaluate <domain>/<skill-name> --json --store
 ```
 
-#### Code Block Escaping
-
-When documenting code examples that contain markdown code fences, use 4 backticks:
-
-````markdown
-**BAD**:
-```markdown
-Some markdown content here
-```
-
-**GOOD**:
-```markdown
-Good content here
-```
-````
-
-### Success Criteria
-
-Measurable targets for verification:
-
-| Criterion | Measurement |
-|-----------|-------------|
-| Dimension Score | >= target/max |
-| Overall Score | >= target-score (target-grade) |
-| References Created | >= N files |
-
-### Effort Estimate
-
-| Phase | Effort | Time |
-|-------|--------|-------|
-| Phase 1 | S/M/L | HH hours |
-| Phase 2 | S/M/L | HH hours |
-| **Total** | **M/L** | **X hours** |
-
-### Additional Sections
-
-- **Dependencies**: Any prerequisites or blockers
-- **Rollback Plan**: Git command to revert changes
-- **Notes**: Honest assessment of plan quality (rating out of 10)
-
-## Honest Rating Guidelines
-
-Rate plans based on:
-
-| Rating | Criteria |
-|--------|----------|
-| **9-10/10** | Template gold standard, comprehensive |
-| **8/10** | Follows Format B well, detailed code examples |
-| **7/10** | Good structure but gaps in specifics |
-| **6/10** | Major restructuring needed |
-| **<5/10** | Fundamental issues with approach |
+1. Read `Remediation.md` in the `.audits/<date>/` folder, starting with the dimension that has the most points available.
+2. Make the smallest edit that closes the gap.
+3. Re-run the audit and compare the dimension score.
+4. Stop at the target grade (A, 126/140 or higher).
 
 ## Common Remediation Patterns
 
 ### Pattern 1: Anti-Pattern Addition
 
-For D3 (Anti-Pattern Quality) improvements:
+For D3 (Anti-Pattern Quality):
 
 ````markdown
 ## Anti-Patterns
@@ -142,11 +41,11 @@ For D3 (Anti-Pattern Quality) improvements:
 
 ### Pattern 2: Reference Creation
 
-For D5 (Progressive Disclosure) improvements:
+For D5 (Progressive Disclosure):
 
-1. Create `skills/<skill>/references/` directory
-2. Extract detailed content from SKILL.md
-3. Add navigation table to SKILL.md:
+1. Create a `references/` directory in the skill.
+2. Extract detailed content from `SKILL.md`.
+3. Add a navigation table to `SKILL.md`:
 
 ```markdown
 ## Quick Reference
@@ -158,33 +57,27 @@ For D5 (Progressive Disclosure) improvements:
 
 ### Pattern 3: Trigger Expansion
 
-For D7 (Pattern Recognition) improvements:
-
-Update frontmatter description:
+For D7 (Pattern Recognition), update the frontmatter description:
 
 ```yaml
 ---
 name: skill-name
 description: |
   [Core description]. Use when: [trigger phrases].
-  
+
   Keywords: [comma-separated keywords]
 ---
 ```
 
 ## Verification
 
-After implementing remediation:
-
 ```bash
-skill-auditor evaluate <skill-name> --json
-rumdl check skills/<skill-name>
+pantheon-skill-auditor evaluate <domain>/<skill-name> --json
+rumdl check skills/<domain>/<skill-name>
 ```
-
-Compare new score against target in plan.
 
 ## Related References
 
-- `framework-dimensions.md` - Understanding the 8 dimensions
+- `framework-dimensions.md` - Understanding the dimensions
 - `framework-scoring-rubric.md` - How scores are calculated
 - `aggregation-pattern.md` - For larger consolidation efforts
