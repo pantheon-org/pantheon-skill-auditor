@@ -67,9 +67,7 @@ Create actionable improvement plans from audit results:
 
 | File | Purpose | Lines | When to Read |
 |------|---------|-------|--------------|
-| `remediation-planning.md` | Plan creation guide | ~300 | Creating remediation plans |
-| `assets/templates/remediation-plan-template.yaml` | Plan template | ~110 | Formatting plans |
-| `assets/schemas/remediation-plan.schema.json` | JSON Schema for plan validation | ~250 | Validating plans |
+| `remediation-planning.md` | Reading and extending `Remediation.md` | ~100 | Creating remediation plans |
 
 **Usage**:
 
@@ -122,11 +120,8 @@ skills/skill-quality-auditor/
 ├── AGENTS.md                                         # This file
 ├── evals/                                            # Eval scenarios
 ├── assets/
-│   ├── templates/
-│   │   └── remediation-plan-template.yaml            # Remediation plan format
 │   └── schemas/
-│       ├── criteria.schema.json                      # JSON Schema for eval criteria
-│       └── remediation-plan.schema.json              # JSON Schema for plan validation
+│       └── criteria.schema.json                      # JSON Schema for eval criteria
 └── references/
     ├── framework-dimensions.md           # CRITICAL
     ├── framework-dimensions.md            # CRITICAL
@@ -181,10 +176,9 @@ Total: 25 references + 1 template + 2 schemas
 
 ### For Remediation Planning
 
-1. Run `skill-auditor evaluate <skill-name> --json`
-2. Load `remediation-planning.md` for guidance
-3. Use `assets/templates/remediation-plan-template.yaml`
-4. Save plan to `.context/plans/<skill-name>-remediation-plan.md`
+1. Run `pantheon-skill-auditor evaluate <domain>/<skill-name> --json --store`
+2. Read the generated `Remediation.md` in the `.audits/<date>/` folder
+3. Load `remediation-planning.md` for guidance on acting on it
 
 ### For Eval Validation (D9)
 

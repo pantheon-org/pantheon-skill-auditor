@@ -56,7 +56,7 @@ pantheon-skill-auditor batch <skill1> <skill2> --fail-below B --store
 1. Run `pantheon-skill-auditor evaluate <skill> --json --store`
 2. Check artifacts and eval coverage using deterministic criteria
 3. Generate a remediation plan with T-shirt sizing and score delta estimates
-4. Run the auditor again to verify improvement; if score is below target, check `remediation-plan.md` and focus on the lowest-scoring dimension
+4. Run the auditor again to verify improvement; if score is below target, check `Remediation.md` and focus on the lowest-scoring dimension
 
 ## Mindset
 
@@ -82,7 +82,7 @@ Remediation workflow:
 
 ```bash
 pantheon-skill-auditor evaluate documentation/markdown-authoring --json --store
-# Score: 98/140 (C+) -> review remediation-plan.md -> fix -> re-audit -> 128/140 (A)
+# Score: 98/140 (C+) -> review Remediation.md -> fix -> re-audit -> 128/140 (A)
 ```
 
 PR-scoped triage:

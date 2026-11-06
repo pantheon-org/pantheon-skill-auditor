@@ -22,11 +22,11 @@ Critical failure modes to avoid when evaluating and improving skill quality.
 - **BAD**: aggregate different domains with weak overlap.
 - **GOOD**: aggregate only when similarity and domain fit are clear.
 
-### NEVER ship remediation plans without validation checks
+### NEVER ship remediation plans without success criteria
 
-- **WHY**: invalid or incomplete plans create execution drift.
+- **WHY**: plans with no measurable target create execution drift.
 - **BAD**: write plan and execute blindly.
-- **GOOD**: validate schema/format and ensure deterministic success criteria.
+- **GOOD**: state the expected score change per step and re-audit to confirm it.
 
 ### NEVER ignore Knowledge Delta scoring when it's below 15/20
 

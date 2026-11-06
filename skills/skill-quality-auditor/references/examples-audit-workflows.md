@@ -52,7 +52,7 @@ diff <(cat .context/audits/infrastructure/terraform-generator/2025-12-01/audit.j
 skill-auditor evaluate documentation/markdown-authoring --json --store
 # Score: 98/140 (C+) -> blocked from publishing
 
-cat .context/audits/documentation/markdown-authoring/$(date +%Y-%m-%d)/remediation-plan.md
+cat <skill-dir>/.audits/$(date +%Y-%m-%d)/Remediation.md
 # Outputs prioritized fixes:
 #   1. [HIGH] D3 Anti-Patterns: Add 5 anti-patterns with BAD/GOOD examples (S effort)
 #   2. [HIGH] D5 Progressive Disclosure: Restructure Quick Start -> Guide -> Advanced (M effort)
