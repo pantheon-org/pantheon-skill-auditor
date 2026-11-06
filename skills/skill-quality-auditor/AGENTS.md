@@ -67,7 +67,7 @@ Create actionable improvement plans from audit results:
 
 | File | Purpose | Lines | When to Read |
 |------|---------|-------|--------------|
-| `remediation-planning.md` | Reading and extending `Remediation.md` | ~100 | Creating remediation plans |
+| `remediation-planning.md` | Acting on `Remediation.md`, common fix patterns | ~80 | Fixing audit gaps |
 
 **Usage**:
 
@@ -178,7 +178,7 @@ Total: 25 references + 1 template + 2 schemas
 
 1. Run `pantheon-skill-auditor evaluate <domain>/<skill-name> --json --store`
 2. Read the generated `Remediation.md` in the `.audits/<date>/` folder
-3. Load `remediation-planning.md` for guidance on acting on it
+3. Load `remediation-planning.md` for the common fix patterns, fix, then re-audit
 
 ### For Eval Validation (D9)
 

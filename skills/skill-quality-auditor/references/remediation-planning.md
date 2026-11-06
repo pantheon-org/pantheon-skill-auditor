@@ -1,39 +1,19 @@
 # Remediation Planning Guide
 
-Guide for turning skill quality audit results into an improvement plan.
+Guide for acting on the remediation output of a skill quality audit.
 
-## The Plan Format
+## The Loop
 
-There is one remediation plan: `Remediation.md`, written by `pantheon-skill-auditor evaluate --store`.
-It sits beside `Analysis.md` and `audit.json` in `skills/<domain>/<skill-name>/.audits/<date>/`.
-No tool reads it back, so it is a working document for you, not a checked artifact.
+`Remediation.md` is a view of `audit.json`, written by `evaluate --store`. It is not a plan you write, and no tool reads it back.
 
 ```bash
 pantheon-skill-auditor evaluate <domain>/<skill-name> --json --store
 ```
 
-`Remediation.md` holds:
-
-- The current grade and total.
-- One section per dimension that scored below its maximum, largest shortfall first.
-- Per section: the score, the points available, what happened, the likely cause and the fix.
-
-## Using It
-
-1. Read the top section first; it has the most points available.
-2. Open the files the likely cause points at and make the smallest edit that closes the gap.
-3. Re-run the audit and compare the dimension score against the points listed.
-4. Stop once the skill reaches the target grade (A, 126/140 or higher).
-
-## When To Add Detail
-
-The generated plan is generic per dimension. Add your own notes (in the PR description, not in the skill) when:
-
-- Two dimensions share a cause, such as a short `description` lowering D4 and D7.
-- A fix has a cost, such as moving content to `references/` for D5 while `SKILL.md` links must stay valid.
-- The target is more than one grade away, so the work needs ordering.
-
-Size each step S, M or L and state the expected score change, so the result can be checked against the next audit.
+1. Read `Remediation.md` in the `.audits/<date>/` folder, starting with the dimension that has the most points available.
+2. Make the smallest edit that closes the gap.
+3. Re-run the audit and compare the dimension score.
+4. Stop at the target grade (A, 126/140 or higher).
 
 ## Common Remediation Patterns
 

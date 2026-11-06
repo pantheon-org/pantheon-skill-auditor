@@ -55,7 +55,7 @@ pantheon-skill-auditor batch <skill1> <skill2> --fail-below B --store
 
 1. Run `pantheon-skill-auditor evaluate <skill> --json --store`
 2. Check artifacts and eval coverage using deterministic criteria
-3. Generate a remediation plan with T-shirt sizing and score delta estimates
+3. Read the generated `Remediation.md` for per-dimension gaps and fixes
 4. Run the auditor again to verify improvement; if score is below target, check `Remediation.md` and focus on the lowest-scoring dimension
 
 ## Mindset
@@ -125,6 +125,6 @@ pantheon-skill-auditor evaluate agentic-harness/skill-quality-auditor --json
 | --- | --- | --- |
 | CI gate configuration and batch pass/fail logic | [Quality Thresholds](references/quality-thresholds-scoring.md) | Setting up CI quality gates |
 | NEVER/WHY/BAD/GOOD failure modes per dimension | [Anti-Patterns](references/detailed-anti-patterns.md) | Explaining low scores or writing remediation guidance |
-| T-shirt sizing and remediation roadmaps | [Remediation Planning](references/remediation-planning.md) | Writing a remediation plan for a C/D-grade skill |
+| Fix patterns for audit gaps | [Remediation Planning](references/remediation-planning.md) | Acting on Remediation.md for a C/D-grade skill |
 | Deduplication workflow and aggregation guidance | [Duplication Detection](references/duplication-detection-algorithm.md) | Detecting skill overlap or planning aggregations |
 | `pantheon-skill-auditor evaluate/batch` usage and output formats | [Scripts Workflow](references/scripts-audit-workflow.md) | Running audits from the command line |
