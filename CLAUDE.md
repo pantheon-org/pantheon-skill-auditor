@@ -15,12 +15,27 @@ how it is installed.
   `crates/skill-auditor/build.rs` embeds it in the binary, so a change here changes the binary.
 - `action.yml`: composite action that installs a released binary, verified against a SHA-256.
 - `.github/workflows/`: CI. `rust-ci.yml` is the source of truth for what must pass. `audit-skill.yml` audits the
-  skill with a released binary, installed through `action.yml`.
+  skill with a released binary, installed through `action.yml`. All but `release.yml` are rendered by the scaffold
+  (see "Rendered files").
+- `scaffold.pkl`: the pantheon-scaffold configuration. `.pkl-gen/manifest.json` records what it rendered.
 - `.context/`: gitignored working state. Never commit it.
+
+## Rendered files
+
+The CI, tooling and lint files are rendered from the `pantheon-scaffold` package by `scaffold.pkl`, and `Scaffold check`
+fails when one drifts. Do not edit a rendered file by hand: change `scaffold.pkl` (for example `toolchain`) and run
+`pantheon-scaffold render scaffold.pkl`, or move to a newer package with `pantheon-scaffold upgrade <version>`. The
+files kept by hand are `hk.pkl`, `release-please-config.json`, `.release-please-manifest.json`, `SECURITY.md`, the
+cargo-dist `release.yml` and `.mise/conf.d/repo.toml`. Dependabot skips the rendered workflows, so their action pins
+move with `upgrade`. It also ignores `actions/upload-artifact` and `actions/download-artifact`: their commits are set
+in `dist-workspace.toml`, followed by `dist generate`. `hk.shared.pkl` is rendered but `hk.pkl` does not import it yet.
+Documentation of the scaffold: <https://github.com/pantheon-org/pantheon-scaffold>.
 
 ## Commands
 
-Tools are pinned in `mise.toml` (`mise install` sets them up and installs the git hooks).
+Tools are pinned in `mise.toml`, which the scaffold renders; a tool of this repository alone goes in
+`.mise/conf.d/repo.toml`. `mise.lock` records every tool with its checksum. `mise install` sets them up and installs
+the git hooks.
 
 ```bash
 cargo fmt --all --check
@@ -64,9 +79,10 @@ BLESS_GOLDENS=1 cargo test -p pantheon-skill-auditor --test grade_parity
   findings are listed in `.github/zizmor.yml` (matched by line and column) and `.github/actionlint.yaml`. After
   `dist generate`, re-run both linters and update the line numbers if they moved.
 - Markdown is linted by rumdl with `.rumdl.toml`. Shell scripts must pass shellcheck.
-- The Rust toolchain version is set in `rust-toolchain.toml` (the source of truth), `mise.toml`, `rust-ci.yml` and
-  `cargo-deny.yml`, with `rust-version` in `Cargo.toml` as its major.minor. Change them together:
-  `.github/scripts/check-toolchain-version.sh` runs in `rust-ci.yml` and fails if they differ.
+- The Rust toolchain version is set in `rust-toolchain.toml` (the source of truth) and `toolchain` in `scaffold.pkl`,
+  with `rust-version` in `Cargo.toml` as its major.minor. `mise.toml`, `rust-ci.yml` and `cargo-deny.yml` follow the
+  render. Change them together: `.github/scripts/check-toolchain-version.sh` runs in `rust-ci.yml` and fails if
+  they differ.
 - The `pahdk-*` dependencies are pinned in the root `Cargo.toml`, to a git tag. Both must share one pin.
 - A workflow `run:` block holds at most 15 lines of code; longer logic goes in a script under `.github/scripts/`.
 - `validate` and `check` exit 0 clean, 1 error, 2 warnings only, 3 usage error. Keep those codes; workflows depend
