@@ -23,13 +23,12 @@ how it is installed.
 ## Rendered files
 
 The CI, tooling and lint files are rendered from the `pantheon-scaffold` package by `scaffold.pkl`, and `Scaffold check`
-fails when one drifts. Do not edit a rendered file by hand: change `scaffold.pkl` (for example `toolchain`) and run
-`pantheon-scaffold render scaffold.pkl`, or move to a newer package with `pantheon-scaffold upgrade <version>`. The
-files kept by hand are `hk.pkl`, `release-please-config.json`, `.release-please-manifest.json`, `SECURITY.md`, the
-cargo-dist `release.yml` and `.mise/conf.d/repo.toml`. Dependabot skips the rendered workflows, so their action pins
-move with `upgrade`. It also ignores `actions/upload-artifact` and `actions/download-artifact`: their commits are set
-in `dist-workspace.toml`, followed by `dist generate`. `hk.shared.pkl` is rendered but `hk.pkl` does not import it yet.
-Documentation of the scaffold: <https://github.com/pantheon-org/pantheon-scaffold>.
+fails when one drifts. Change `scaffold.pkl` (for example `toolchain`) and run
+`pantheon-scaffold render scaffold.pkl` instead of editing a rendered file by hand, or move to a newer package with `pantheon-scaffold upgrade <version>`. Kept by
+hand: `hk.pkl`, the release-please files, `SECURITY.md`, the cargo-dist `release.yml` and `.mise/conf.d/repo.toml`.
+Dependabot skips the rendered workflows, so their action pins move with `upgrade`. It also ignores
+`actions/upload-artifact` and `actions/download-artifact`: set their commits in `dist-workspace.toml`, then run
+`dist generate`. `hk.pkl` does not import `hk.shared.pkl` yet.
 
 ## Commands
 
