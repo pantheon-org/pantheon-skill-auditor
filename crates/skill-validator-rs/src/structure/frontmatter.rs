@@ -527,6 +527,23 @@ mod tests {
     }
 
     #[test]
+    fn non_string_metadata_loads_and_is_reported_per_key() {
+        // Upstream v1.6.1 (issue #92): a nested metadata value no longer fails
+        // the load; it is reported by the frontmatter check instead.
+        let root = tempdir().unwrap();
+        let s = load(
+            root.path(),
+            "description: A demo skill.\nmetadata:\n  tags: [a, b]\n  owner: me\n",
+        );
+        let errors: Vec<String> = check_frontmatter(&s, &Options::default())
+            .into_iter()
+            .filter(|r| r.level == crate::types::Level::Error)
+            .map(|r| r.message)
+            .collect();
+        assert_eq!(errors, vec![r#"metadata["tags"] value must be a string"#]);
+    }
+
+    #[test]
     fn split_sentences_empty() {
         assert!(split_sentences("").is_empty());
     }
