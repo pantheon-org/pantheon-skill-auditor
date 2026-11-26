@@ -207,7 +207,7 @@ pub fn validate(dir: &Path, opts: &Options) -> Report {
         Ok(s) => s,
         Err(e) => {
             let ctx = ResultContext::with_file("Frontmatter", "SKILL.md");
-            let hint = std::fs::read_to_string(dir.join("SKILL.md"))
+            let hint = fsutil::safe_read(dir, &dir.join("SKILL.md"))
                 .ok()
                 .and_then(|content| crate::skill::description_yaml_hint(&content));
             report.results.push(ctx.error(match hint {
@@ -275,6 +275,64 @@ mod tests {
             fs::create_dir_all(parent).unwrap();
         }
         fs::write(path, contents).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinks_out_of_the_skill_are_not_read_or_linked() {
+        use std::os::unix::fs::symlink;
+        let outside = TempDir::new().unwrap();
+        write(outside.path(), "secret.md", "# Secret\n");
+
+        let tmp = TempDir::new().unwrap();
+        write(
+            tmp.path(),
+            "SKILL.md",
+            "---\nname: demo\ndescription: A demo skill.\n---\nSee [leak](references/leak.md).\n",
+        );
+        fs::create_dir_all(tmp.path().join("references")).unwrap();
+        symlink(
+            outside.path().join("secret.md"),
+            tmp.path().join("references/leak.md"),
+        )
+        .unwrap();
+
+        let report = validate(tmp.path(), &Options::default());
+        let msgs: Vec<&str> = report.results.iter().map(|r| r.message.as_str()).collect();
+        assert!(
+            msgs.contains(&"skipping non-regular file: references/leak.md"),
+            "{msgs:?}"
+        );
+        assert!(
+            msgs.contains(
+                &"internal link escapes skill directory: references/leak.md (resolves outside the skill package)"
+            ),
+            "{msgs:?}"
+        );
+        assert!(
+            !report
+                .token_counts
+                .iter()
+                .any(|c| c.file == "references/leak.md"),
+            "{:?}",
+            report.token_counts
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_skill_md_fails_to_load() {
+        use std::os::unix::fs::symlink;
+        let outside = TempDir::new().unwrap();
+        write(
+            outside.path(),
+            "SKILL.md",
+            "---\nname: demo\ndescription: A demo skill.\n---\n# Body\n",
+        );
+        let tmp = TempDir::new().unwrap();
+        symlink(outside.path().join("SKILL.md"), tmp.path().join("SKILL.md")).unwrap();
+        let err = crate::skill::Skill::load(tmp.path()).unwrap_err();
+        assert!(err.contains("is not a regular file"), "{err}");
     }
 
     #[test]

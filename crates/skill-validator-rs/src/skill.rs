@@ -70,8 +70,10 @@ impl Skill {
     /// Read and parse `<dir>/SKILL.md` (Go `skill.Load`).
     pub fn load(dir: &Path) -> Result<Skill, String> {
         let path = dir.join("SKILL.md");
-        let content =
-            std::fs::read_to_string(&path).map_err(|e| format!("reading SKILL.md: {e}"))?;
+        // A skill is untrusted input: refuse a symlinked SKILL.md, one that
+        // resolves outside `dir`, or one over the read limit (upstream v1.6.2).
+        let content = crate::structure::fsutil::safe_read(dir, &path)
+            .map_err(|e| format!("reading SKILL.md: {e}"))?;
 
         let (fm, body) = split_frontmatter(&content)?;
 

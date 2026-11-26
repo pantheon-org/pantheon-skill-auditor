@@ -156,10 +156,10 @@ fn analyze_reference_files(dir: &Path) -> Vec<ReferenceReport> {
     let name = skill_name(dir);
     let mut reports = Vec::new();
     for entry in read_dir_sorted(&refs_dir) {
-        if entry.is_dir || entry.name.starts_with('.') {
+        if entry.is_dir || entry.name.starts_with('.') || !entry.is_regular {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&entry.path) else {
+        let Ok(text) = crate::structure::fsutil::safe_read(dir, &entry.path) else {
             continue;
         };
         let content = analyze_content(&text);

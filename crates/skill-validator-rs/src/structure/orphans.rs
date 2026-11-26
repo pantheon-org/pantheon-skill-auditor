@@ -10,7 +10,10 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::fsutil::{is_text_file, read_dir_sorted, walk_files};
+use super::fsutil::{
+    format_byte_size, is_regular_file, is_text_file, read_dir_sorted, safe_read, walk_files,
+    ReadError, MAX_SKILL_FILE_BYTES,
+};
 use crate::types::{ResultContext, ValidationResult};
 
 /// Recognised subdirectories in a stable order for deterministic output
@@ -64,6 +67,8 @@ pub fn check_orphan_files(dir: &Path, body: &str, opts: &super::Options) -> Vec<
     let mut missing_extension: BTreeSet<String> = BTreeSet::new();
     let mut scanned_root_files: BTreeSet<String> = BTreeSet::new();
     let mut scanned_init_files: BTreeSet<String> = BTreeSet::new();
+    // Files too large to scan for references (upstream v1.6.2).
+    let mut unscanned: BTreeSet<String> = BTreeSet::new();
 
     let mut queue: Vec<QueueItem> = vec![QueueItem {
         text: body.to_string(),
@@ -89,12 +94,7 @@ pub fn check_orphan_files(dir: &Path, body: &str, opts: &super::Options) -> Vec<
             }
             if lower_text.contains(&rf.to_lowercase()) {
                 scanned_root_files.insert(rf.clone());
-                if let Ok(data) = std::fs::read_to_string(dir.join(rf)) {
-                    queue.push(QueueItem {
-                        text: data,
-                        source: rf.clone(),
-                    });
-                }
+                enqueue(dir, rf, &mut queue, &mut unscanned);
             }
         }
 
@@ -125,6 +125,7 @@ pub fn check_orphan_files(dir: &Path, body: &str, opts: &super::Options) -> Vec<
                 &mut queue,
                 &mut reached,
                 &mut reached_from,
+                &mut unscanned,
             );
         }
 
@@ -135,14 +136,22 @@ pub fn check_orphan_files(dir: &Path, body: &str, opts: &super::Options) -> Vec<
                     continue;
                 }
                 scanned_init_files.insert(init_path.clone());
-                if let Ok(data) = std::fs::read_to_string(dir.join(&init_path)) {
-                    queue.push(QueueItem {
-                        text: data,
-                        source: init_path,
-                    });
-                }
+                enqueue(dir, &init_path, &mut queue, &mut unscanned);
             }
         }
+    }
+
+    // Files too large to scan cannot vouch for anything they link to, so say
+    // so before any orphan warnings those links would have prevented.
+    for rel_path in &unscanned {
+        results.push(ctx.warn_file(
+            rel_path,
+            format!(
+                "{rel_path} is larger than {} and was not scanned for references — files it \
+                 links to may be reported as unreferenced",
+                format_byte_size(MAX_SKILL_FILE_BYTES)
+            ),
+        ));
     }
 
     // Report per recognised directory.
@@ -190,7 +199,7 @@ pub fn check_orphan_files(dir: &Path, body: &str, opts: &super::Options) -> Vec<
 fn root_text_files(dir: &Path) -> Vec<String> {
     let mut files = Vec::new();
     for entry in read_dir_sorted(dir) {
-        if entry.is_dir {
+        if entry.is_dir || !entry.is_regular {
             continue;
         }
         if entry.name.eq_ignore_ascii_case("SKILL.md") {
@@ -216,7 +225,7 @@ fn inventory_files(dir: &Path) -> Vec<String> {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            if name == "__init__.py" {
+            if name == "__init__.py" || !is_regular_file(&path) {
                 continue;
             }
             let rel = path
@@ -275,17 +284,33 @@ fn mark_reached(
     queue: &mut Vec<QueueItem>,
     reached: &mut BTreeSet<String>,
     reached_from: &mut BTreeMap<String, String>,
+    unscanned: &mut BTreeSet<String>,
 ) {
     reached.insert(rel_path.to_string());
     reached_from.insert(rel_path.to_string(), source.to_string());
 
     if is_text_file(rel_path) {
-        if let Ok(data) = std::fs::read_to_string(dir.join(rel_path)) {
-            queue.push(QueueItem {
-                text: data,
-                source: rel_path.to_string(),
-            });
+        enqueue(dir, rel_path, queue, unscanned);
+    }
+}
+
+/// Read `rel_path` through the guarded reader and queue its text for the
+/// walk; a file over the read limit is recorded as unscanned instead.
+fn enqueue(
+    dir: &Path,
+    rel_path: &str,
+    queue: &mut Vec<QueueItem>,
+    unscanned: &mut BTreeSet<String>,
+) {
+    match safe_read(dir, &dir.join(rel_path)) {
+        Ok(text) => queue.push(QueueItem {
+            text,
+            source: rel_path.to_string(),
+        }),
+        Err(ReadError::TooLarge(_)) => {
+            unscanned.insert(rel_path.to_string());
         }
+        Err(_) => {}
     }
 }
 
@@ -338,7 +363,7 @@ pub fn check_flat_orphan_files(dir: &Path, body: &str) -> Vec<ValidationResult> 
 
     let mut root_files: Vec<String> = Vec::new();
     for entry in read_dir_sorted(dir) {
-        if entry.is_dir || entry.name.starts_with('.') {
+        if entry.is_dir || entry.name.starts_with('.') || !entry.is_regular {
             continue;
         }
         if entry.name.eq_ignore_ascii_case("SKILL.md") {

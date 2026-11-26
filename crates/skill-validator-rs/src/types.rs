@@ -66,6 +66,15 @@ pub struct TokenCount {
     /// Number of `o200k_base` token ids for the file's text.
     #[serde(rename = "Tokens")]
     pub tokens: usize,
+    /// The file is larger than the read limit, so `tokens` covers only the
+    /// prefix that was read (upstream v1.6.2). Omitted from JSON when false.
+    #[serde(rename = "Truncated", default, skip_serializing_if = "is_false")]
+    pub truncated: bool,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Content quality metrics (Go `types.ContentReport`). Field names match the

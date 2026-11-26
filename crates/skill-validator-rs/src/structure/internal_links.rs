@@ -6,6 +6,7 @@
 use std::io::ErrorKind;
 use std::path::Path;
 
+use super::fsutil::resolves_within;
 use crate::links::extract_links;
 use crate::types::{ResultContext, ValidationResult};
 
@@ -45,9 +46,17 @@ pub fn check_internal_links(dir: &Path, body: &str) -> Vec<ValidationResult> {
         }
         if is_not_exist(&resolved) {
             results.push(ctx.error(format!("broken internal link: {link} (file not found)")));
-        } else {
-            results.push(ctx.pass(format!("internal link: {link} (exists)")));
+            continue;
         }
+        // The lexical check above cannot see symlinks: a path that looks
+        // internal may still resolve outside the skill (upstream v1.6.0).
+        if !resolves_within(dir, Path::new(&resolved)).unwrap_or(false) {
+            results.push(ctx.error(format!(
+                "internal link escapes skill directory: {link} (resolves outside the skill package)"
+            )));
+            continue;
+        }
+        results.push(ctx.pass(format!("internal link: {link} (exists)")));
     }
     results
 }
