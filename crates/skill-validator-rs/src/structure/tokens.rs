@@ -13,6 +13,7 @@ use super::fsutil::{
     ext_lower, format_byte_size, is_binary_ext, read_dir_sorted, rel_slash, safe_read_n,
     walk_files, ReadError, MAX_SKILL_FILE_BYTES,
 };
+use super::paths::{normalized_relative_paths, path_in_subtree};
 use super::Options;
 use crate::types::{ResultContext, TokenCount, ValidationResult};
 use crate::util::format_number;
@@ -164,7 +165,11 @@ pub fn check_tokens(
     }
 
     // Non-standard ("other") files.
-    let other_counts = count_other_files(dir, opts);
+    let mut exclusions = TokenPathExclusions::new(&opts.exclude_token_paths);
+    let other_counts = count_other_files(dir, opts, &mut exclusions);
+    for path in exclusions.applied_paths() {
+        results.push(ctx.info(format!("excluded from token accounting: {path}")));
+    }
     let other_total: usize = other_counts.iter().map(|c| c.tokens).sum();
     if other_total > OTHER_TOTAL_HARD_LIMIT {
         results.push(ctx.error(format!(
@@ -239,7 +244,73 @@ fn count_asset_files(dir: &Path) -> Vec<TokenCount> {
     counts
 }
 
-fn count_other_files(dir: &Path, opts: &Options) -> Vec<TokenCount> {
+/// The `--exclude-token-paths` subtrees, remembering which ones matched a
+/// file or directory so only those are reported (Go `tokenPathExclusions`).
+struct TokenPathExclusions {
+    paths: Vec<String>,
+    applied: Vec<bool>,
+}
+
+impl TokenPathExclusions {
+    fn new(paths: &[String]) -> Self {
+        let paths = normalized_relative_paths(paths);
+        let applied = vec![false; paths.len()];
+        Self { paths, applied }
+    }
+
+    /// Whether the skill-relative `candidate` is excluded; the first matching
+    /// subtree is marked applied.
+    fn excludes(&mut self, candidate: &str) -> bool {
+        let candidate = candidate.replace('\\', "/");
+        match self
+            .paths
+            .iter()
+            .position(|p| path_in_subtree(&candidate, p))
+        {
+            Some(i) => {
+                self.applied[i] = true;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The subtrees that excluded something, in the order given.
+    fn applied_paths(&self) -> Vec<&str> {
+        self.paths
+            .iter()
+            .zip(&self.applied)
+            .filter(|(_, applied)| **applied)
+            .map(|(p, _)| p.as_str())
+            .collect()
+    }
+}
+
+/// Every non-hidden file under `dir`, skipping excluded subtrees without
+/// descending into them (Go `countFilesInDir`'s `filepath.SkipDir`).
+fn walk_unexcluded(
+    root: &Path,
+    dir: &Path,
+    exclusions: &mut TokenPathExclusions,
+    out: &mut Vec<std::path::PathBuf>,
+) {
+    for e in read_dir_sorted(dir) {
+        if e.name.starts_with('.') || exclusions.excludes(&rel_slash(root, &e.path)) {
+            continue;
+        }
+        if e.is_dir {
+            walk_unexcluded(root, &e.path, exclusions, out);
+        } else {
+            out.push(e.path);
+        }
+    }
+}
+
+fn count_other_files(
+    dir: &Path,
+    opts: &Options,
+    exclusions: &mut TokenPathExclusions,
+) -> Vec<TokenCount> {
     let mut counts = Vec::new();
     for e in read_dir_sorted(dir) {
         if e.name.starts_with('.') {
@@ -249,8 +320,11 @@ fn count_other_files(dir: &Path, opts: &Options) -> Vec<TokenCount> {
             if STANDARD_DIRS.contains(&e.name.to_lowercase().as_str()) {
                 continue;
             }
+            if exclusions.excludes(&e.name) {
+                continue;
+            }
             let mut files = Vec::new();
-            walk_files(&e.path, &mut files);
+            walk_unexcluded(dir, &e.path, exclusions, &mut files);
             for path in files {
                 let fname = path
                     .file_name()
@@ -275,6 +349,9 @@ fn count_other_files(dir: &Path, opts: &Options) -> Vec<TokenCount> {
             if STANDARD_ROOT_FILES.contains(&e.name.to_lowercase().as_str())
                 || opts.allow_flat_layouts
             {
+                continue;
+            }
+            if exclusions.excludes(&e.name) {
                 continue;
             }
             if is_binary_ext(&e.name) {

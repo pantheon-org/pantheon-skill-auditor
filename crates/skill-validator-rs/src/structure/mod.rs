@@ -8,6 +8,7 @@ pub mod fsutil;
 pub mod internal_links;
 pub mod markdown;
 pub mod orphans;
+pub mod paths;
 pub mod tokens;
 
 use std::path::Path;
@@ -57,6 +58,12 @@ pub struct Options {
     pub allow_flat_layouts: bool,
     /// Directory names accepted without warning and exempt from nesting checks.
     pub allow_dirs: Vec<String>,
+    /// Skill-relative subtrees where deep nesting is allowed: an info result
+    /// replaces the warning (`--allow-nested-paths`, upstream v1.8.0).
+    pub allow_nested_paths: Vec<String>,
+    /// Skill-relative subtrees left out of non-standard token accounting
+    /// (`--exclude-token-paths`, upstream v1.8.0).
+    pub exclude_token_paths: Vec<String>,
 }
 
 fn is_recognized_dir(name: &str) -> bool {
@@ -69,10 +76,12 @@ fn is_known_extraneous(lower: &str) -> bool {
 
 /// Validate the directory layout of a skill package (Go `CheckStructure`):
 /// require SKILL.md, flag unrecognised directories and extraneous root files,
-/// and warn about deep nesting in recognised directories.
+/// and warn about deep nesting in recognised directories, except within
+/// `opts.allow_nested_paths`.
 pub fn check_structure(dir: &Path, opts: &Options) -> Vec<ValidationResult> {
     let ctx = ResultContext::new("Structure");
     let mut results: Vec<ValidationResult> = Vec::new();
+    let allowed_nested = paths::normalized_relative_paths(&opts.allow_nested_paths);
 
     // SKILL.md must exist.
     if !dir.join("SKILL.md").exists() {
@@ -102,7 +111,7 @@ pub fn check_structure(dir: &Path, opts: &Options) -> Vec<ValidationResult> {
         if !subdir.exists() {
             continue;
         }
-        results.extend(check_nesting(&ctx, &subdir, dir_name));
+        results.extend(check_nesting(&ctx, &subdir, dir_name, &allowed_nested));
     }
 
     results
@@ -175,14 +184,24 @@ fn unknown_dir_hint(dir: &Path) -> String {
     format!("; should this be {}?", candidates.join(" or "))
 }
 
-fn check_nesting(ctx: &ResultContext, dir: &Path, prefix: &str) -> Vec<ValidationResult> {
+fn check_nesting(
+    ctx: &ResultContext,
+    dir: &Path,
+    prefix: &str,
+    allowed: &[String],
+) -> Vec<ValidationResult> {
     let mut results = Vec::new();
     for entry in fsutil::read_dir_sorted(dir) {
         if entry.name.starts_with('.') {
             continue;
         }
         if entry.is_dir {
-            results.push(ctx.warn(format!("deep nesting detected: {}/{}/", prefix, entry.name)));
+            let nested = format!("{prefix}/{}", entry.name);
+            if allowed.iter().any(|a| paths::path_in_subtree(&nested, a)) {
+                results.push(ctx.info(format!("deep nesting allowed: {nested}/")));
+            } else {
+                results.push(ctx.warn(format!("deep nesting detected: {nested}/")));
+            }
         }
     }
     results

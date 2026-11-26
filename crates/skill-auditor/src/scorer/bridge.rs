@@ -42,6 +42,7 @@ impl ValidatorBridge {
             allow_flat_layouts: true,
             allow_extra_frontmatter: true,
             allow_dirs: Vec::new(),
+            ..Options::default()
         };
         let structure = Some(validate(skill_dir, &opts));
 
