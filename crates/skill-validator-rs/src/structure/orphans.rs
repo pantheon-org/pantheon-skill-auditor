@@ -251,12 +251,36 @@ fn files_in_dir(inventory: &[String], dir: &str) -> Vec<String> {
 /// Whether `text` references `rel_path`, by full root-relative path or by a
 /// path relative to `source_dir` (Go `containsReference`).
 fn contains_reference(text: &str, source_dir: &str, rel_path: &str) -> bool {
-    if text.contains(rel_path) {
+    matches_reference(text, source_dir, rel_path, false)
+}
+
+/// Like [`contains_reference`] but strips the extension first
+/// (Go `containsReferenceWithoutExtension`). The `source_dir`-relative form is
+/// skipped when it would be a bare file name: with no extension and no
+/// directory separator it cannot be told apart from an ordinary word in prose
+/// (upstream issue #85).
+fn contains_reference_without_extension(text: &str, source_dir: &str, rel_path: &str) -> bool {
+    let ext = ext_of(rel_path);
+    if ext.is_empty() {
+        return false;
+    }
+    let no_ext = rel_path.strip_suffix(&ext).unwrap_or(rel_path);
+    matches_reference(text, source_dir, no_ext, true)
+}
+
+/// Whether `text` mentions `rel_path` by its root-relative form or by its
+/// form relative to `source_dir` (Go `matchesReference`). With
+/// `rel_requires_dir`, the relative form must still contain a `/`.
+fn matches_reference(text: &str, source_dir: &str, rel_path: &str, rel_requires_dir: bool) -> bool {
+    if contains_path_token(text, rel_path) {
         return true;
     }
     if !source_dir.is_empty() {
         if let Some(rel) = rel_to(source_dir, rel_path) {
-            if !rel.starts_with("..") && text.contains(&rel) {
+            if !rel.starts_with("..")
+                && (!rel_requires_dir || rel.contains('/'))
+                && contains_path_token(text, &rel)
+            {
                 return true;
             }
         }
@@ -264,15 +288,32 @@ fn contains_reference(text: &str, source_dir: &str, rel_path: &str) -> bool {
     false
 }
 
-/// Like [`contains_reference`] but strips the extension first
-/// (Go `containsReferenceWithoutExtension`).
-fn contains_reference_without_extension(text: &str, source_dir: &str, rel_path: &str) -> bool {
-    let ext = ext_of(rel_path);
-    if ext.is_empty() {
-        return false;
+/// Whether `token` occurs in `text` with path-word boundaries on both sides,
+/// so `references/lint` does not match inside `references/linting` and
+/// `lint.yml` does not match inside `eslint.yml` (Go `containsPathToken`,
+/// upstream v1.6.0).
+fn contains_path_token(text: &str, token: &str) -> bool {
+    if token.is_empty() {
+        return true;
     }
-    let no_ext = rel_path.strip_suffix(&ext).unwrap_or(rel_path);
-    contains_reference(text, source_dir, no_ext)
+    let bytes = text.as_bytes();
+    let mut start = 0;
+    while let Some(i) = text[start..].find(token) {
+        let at = start + i;
+        let end = at + token.len();
+        let before_ok = at == 0 || !is_path_word_byte(bytes[at - 1]);
+        let after_ok = end == bytes.len() || !is_path_word_byte(bytes[end]);
+        if before_ok && after_ok {
+            return true;
+        }
+        // Advance one character, keeping `start` on a char boundary.
+        start = at + text[at..].chars().next().map_or(1, char::len_utf8);
+    }
+    false
+}
+
+fn is_path_word_byte(b: u8) -> bool {
+    b == b'_' || b == b'-' || b.is_ascii_alphanumeric()
 }
 
 /// Mark a file reached and, if it is text, enqueue its contents
@@ -522,6 +563,55 @@ fn rel_to(base: &str, target: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contains_path_token_respects_path_word_boundaries() {
+        // Upstream TestContainsPathToken cases.
+        for (text, token, want) in [
+            ("see references/lint.yml here", "references/lint.yml", true),
+            ("references/lint.yml", "references/lint.yml", true),
+            ("(references/lint.yml)", "references/lint.yml", true),
+            ("./references/lint.yml", "references/lint.yml", true),
+            ("my-references/lint.yml", "references/lint.yml", false),
+            ("references/lint.yml2", "references/lint.yml", false),
+            ("eslint.yml", "lint.yml", false),
+            ("lint.yml.bak then lint.yml", "lint.yml", true),
+            ("", "lint.yml", false),
+            ("caf\u{e9} lint.yml", "lint.yml", true),
+        ] {
+            assert_eq!(
+                contains_path_token(text, token),
+                want,
+                "{text:?} / {token:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn extensionless_reference_needs_a_directory_or_full_path() {
+        // Upstream TestContainsReferenceWithoutExtension (issue #85).
+        let prose = "Run the lint step before committing. Linting catches most problems.";
+        assert!(!contains_reference_without_extension(
+            prose,
+            "references",
+            "references/lint.yml"
+        ));
+        assert!(contains_reference_without_extension(
+            "Run scripts/check_fillable_fields to inspect the form.",
+            "",
+            "scripts/check_fillable_fields.py"
+        ));
+        assert!(!contains_reference_without_extension(
+            "See references/linting for details.",
+            "",
+            "references/lint.yml"
+        ));
+        assert!(contains_reference_without_extension(
+            "Run images/render to regenerate.",
+            "references",
+            "references/images/render.py"
+        ));
+    }
     use std::fs;
     use tempfile::TempDir;
 
