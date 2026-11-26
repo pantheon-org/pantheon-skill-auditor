@@ -97,6 +97,8 @@ pub enum OutputFormat {
     Json,
     /// A Markdown report with a results table.
     Markdown,
+    /// One line per skill, with its warnings and errors beneath it.
+    Compact,
 }
 
 /// Process exit code, matching the Go tool's `cmd/exitcode.go` contract:

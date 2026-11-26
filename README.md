@@ -34,6 +34,7 @@ Until this repository has its own release, the latest is
 `validate structure`, `check` and `analyze content` also take a directory of skills. When the path has no
 `SKILL.md`, every skill up to six levels below it is checked and the report ends with totals; `--max-depth=N`
 changes the depth, and `--max-depth=0` checks the path alone.
+Add `-o compact` for one line per skill with only its warnings and errors beneath it.
 
 ## Shell completion
 

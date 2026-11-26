@@ -782,3 +782,38 @@ fn analyze_content_reports_a_skill_that_does_not_load() {
     assert!(skills.iter().filter(|s| s["content"].is_object()).count() == 2);
     assert_eq!(code(&out), 1);
 }
+
+#[test]
+fn compact_output_is_one_line_per_skill() {
+    let tmp = skills_tree();
+    let root = tmp.path();
+    let out = run(&[
+        "validate",
+        "structure",
+        "-o",
+        "compact",
+        root.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&out), 2);
+    let text = stdout(&out);
+    let good = root.join("good");
+    let bad = root.join("group/bad");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[0], format!("✓ {}: passed", good.display()));
+    assert_eq!(lines[1], format!("⚠ {}: 1 warning", bad.display()));
+    assert!(
+        lines[2].starts_with("    ⚠ unknown directory: weird/"),
+        "{text}"
+    );
+    // Then upstream's summary: a blank line, the verdict, the non-zero
+    // totals, a blank line.
+    assert_eq!(
+        &lines[3..],
+        ["", "2 skills validated: all passed", "Total: 1 warning", ""]
+    );
+    assert!(text.ends_with("Total: 1 warning\n\n"), "{text:?}");
+
+    // A single skill is just its line; passes and info results are left out.
+    let single = stdout(&run(&["check", "-o", "compact", good.to_str().unwrap()]));
+    assert_eq!(single, format!("✓ {}: passed\n", good.display()));
+}
