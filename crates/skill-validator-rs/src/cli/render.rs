@@ -17,13 +17,76 @@ pub fn render(report: &CliReport, format: OutputFormat) -> String {
         OutputFormat::Text => render_text(report),
         OutputFormat::Json => render_json(report),
         OutputFormat::Markdown => render_markdown(report),
+        OutputFormat::Compact => render_compact(report),
     }
+}
+
+/// One line for the skill's outcome, with each warning and error beneath
+/// it; passing checks, info results, token counts and analysis sections are
+/// left out (Go `report.PrintCompact`, upstream v1.8.0, without the colour).
+fn render_compact(report: &CliReport) -> String {
+    let icon = if report.errors > 0 {
+        "✗"
+    } else if report.warnings > 0 {
+        "⚠"
+    } else {
+        "✓"
+    };
+    let outcome = if report.errors == 0 && report.warnings == 0 {
+        "passed".to_string()
+    } else {
+        compact_counts(report.errors, report.warnings)
+    };
+    let mut out = format!("{icon} {}: {outcome}\n", report.skill_dir);
+    for r in &report.results {
+        let icon = match r.level {
+            Level::Error => "✗",
+            Level::Warning => "⚠",
+            _ => continue,
+        };
+        out.push_str(&format!("    {icon} {}\n", r.message));
+    }
+    out
+}
+
+/// "1 error, 2 warnings", leaving out a zero count.
+fn compact_counts(errors: usize, warnings: usize) -> String {
+    let mut parts = Vec::new();
+    if errors > 0 {
+        parts.push(format!("{errors} error{}", plural(errors)));
+    }
+    if warnings > 0 {
+        parts.push(format!("{warnings} warning{}", plural(warnings)));
+    }
+    parts.join(", ")
+}
+
+/// The compact skill lines, then the summary as upstream prints it: a blank
+/// line, the verdict, the non-zero totals, and a blank line (Go
+/// `PrintMultiCompact`).
+fn render_multi_compact(multi: &MultiCliReport) -> String {
+    let mut out: String = multi.skills.iter().map(render_compact).collect();
+    let n = multi.skills.len();
+    out.push_str(&format!(
+        "\n{n} skill{} validated: {}\n",
+        plural(n),
+        multi_verdict(multi)
+    ));
+    if multi.errors > 0 || multi.warnings > 0 {
+        out.push_str(&format!(
+            "Total: {}\n",
+            compact_counts(multi.errors, multi.warnings)
+        ));
+    }
+    out.push('\n');
+    out
 }
 
 /// Render several skills' reports: each one as [`render`] would, then the
 /// totals (Go `PrintMulti` / `PrintMultiMarkdown` / `PrintMultiJSON`).
 pub fn render_multi(multi: &MultiCliReport, format: OutputFormat) -> String {
     match format {
+        OutputFormat::Compact => render_multi_compact(multi),
         OutputFormat::Json => {
             serde_json::to_string_pretty(multi).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"))
         }
@@ -57,15 +120,7 @@ pub fn render_multi(multi: &MultiCliReport, format: OutputFormat) -> String {
 /// totals; a skill passes when it has no errors.
 fn multi_summary(multi: &MultiCliReport, markdown: bool) -> String {
     let n = multi.skills.len();
-    let failed = multi.skills.iter().filter(|s| s.errors > 0).count();
-    let passed = n - failed;
-    let verdict = if failed == 0 {
-        "all passed".to_string()
-    } else if passed > 0 {
-        format!("{passed} passed, {failed} failed")
-    } else {
-        format!("{failed} failed")
-    };
+    let verdict = multi_verdict(multi);
     let totals = format!(
         "{} error{}, {} warning{}",
         multi.errors,
@@ -83,6 +138,19 @@ fn multi_summary(multi: &MultiCliReport, markdown: bool) -> String {
             "{n} skill{} validated: {verdict}\nTotal: {totals}\n",
             plural(n)
         )
+    }
+}
+
+/// "all passed", or "x passed, y failed" (only "y failed" when none passed).
+fn multi_verdict(multi: &MultiCliReport) -> String {
+    let failed = multi.skills.iter().filter(|s| s.errors > 0).count();
+    let passed = multi.skills.len() - failed;
+    if failed == 0 {
+        "all passed".to_string()
+    } else if passed > 0 {
+        format!("{passed} passed, {failed} failed")
+    } else {
+        format!("{failed} failed")
     }
 }
 
