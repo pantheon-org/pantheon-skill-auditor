@@ -49,7 +49,8 @@ fn compile_markers(words: &[&str]) -> Vec<Regex> {
 static STRONG_RES: LazyLock<Vec<Regex>> = LazyLock::new(|| compile_markers(STRONG_MARKERS));
 static WEAK_RES: LazyLock<Vec<Regex>> = LazyLock::new(|| compile_markers(WEAK_MARKERS));
 
-/// Common imperative verbs (Go `content.imperativeVerbs`).
+/// English imperative verbs, matched as a sentence's first word (Go
+/// `imperative_default.yaml`, `languages.en.verbs`).
 const IMPERATIVE_VERBS: &[&str] = &[
     "use",
     "run",
@@ -98,6 +99,58 @@ const IMPERATIVE_VERBS: &[&str] = &[
     "send",
     "receive",
 ];
+
+/// Chinese imperative verbs, matched as a sentence prefix (Go
+/// `imperative_default.yaml`, `languages.zh.verbs`, upstream v1.8.0).
+const ZH_IMPERATIVE_VERBS: &[&str] = &[
+    "使用",
+    "运行",
+    "创建",
+    "添加",
+    "设置",
+    "安装",
+    "配置",
+    "编写",
+    "读取",
+    "检查",
+    "验证",
+    "构建",
+    "测试",
+    "确保",
+    "删除",
+    "更新",
+    "调用",
+    "导入",
+    "导出",
+    "定义",
+    "实现",
+    "处理",
+    "解析",
+    "生成",
+    "格式化",
+    "转换",
+    "执行",
+    "打开",
+    "关闭",
+    "保存",
+    "加载",
+    "发送",
+    "接收",
+];
+
+/// Chinese imperative keywords, matched anywhere in a sentence (Go
+/// `languages.zh.keywords`): Chinese imperatives do not always start with a
+/// verb.
+const ZH_IMPERATIVE_KEYWORDS: &[&str] = &[
+    "请", "务必", "确保", "必须", "一定", "切勿", "不要", "禁止", "务须", "需要",
+];
+
+/// Any Han character (Go `unicode.Is(unicode.Han, r)`).
+static HAN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\p{Han}").expect("HAN"));
+
+/// Chinese sentence boundaries (Go `chineseSentencePat`).
+static ZH_SENTENCE_SPLIT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[。！？；\n]+").expect("ZH_SENTENCE_SPLIT"));
 
 static CODE_LANG: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?-u:(?:```|~~~)(\w+))").expect("CODE_LANG"));
@@ -192,31 +245,86 @@ pub fn analyze(content: &str) -> ContentReport {
     }
 }
 
+fn has_chinese(s: &str) -> bool {
+    HAN.is_match(s)
+}
+
+/// Split text into sentences, with code removed (Go
+/// `imperativeDetector.splitSentences`). Text with no Han character takes the
+/// English splitter alone, exactly as before upstream v1.8.0; text with one
+/// is split on Chinese punctuation first.
 fn count_sentences(text: &str) -> Vec<String> {
     let stripped = util::CODE_BLOCK_STRIP.replace_all(text, "");
     let stripped = util::INLINE_CODE_STRIP.replace_all(&stripped, "");
+    if has_chinese(&stripped) {
+        split_mixed(&stripped)
+    } else {
+        split_english(&stripped)
+    }
+}
+
+/// Keep a trimmed part when it is longer than 5 bytes. Go: `len(s) > 5` is a
+/// BYTE-length check, so two Han characters (6 bytes) pass.
+fn push_sentence(out: &mut Vec<String>, part: &str) {
+    let s = part.trim();
+    if s.len() > 5 {
+        out.push(s.to_string());
+    }
+}
+
+/// Split on English sentence boundaries (Go `splitEnglish`).
+fn split_english(text: &str) -> Vec<String> {
     let mut sentences = Vec::new();
-    for part in SENTENCE_SPLIT.split(&stripped) {
+    for part in SENTENCE_SPLIT.split(text) {
+        push_sentence(&mut sentences, part);
+    }
+    sentences
+}
+
+/// Split text holding Chinese (Go `splitMixed`): on Chinese punctuation first,
+/// then a segment with no Han character goes through the English splitter,
+/// and one with Han characters is split on English boundaries only when it
+/// has `.`, `!` or `?`.
+fn split_mixed(text: &str) -> Vec<String> {
+    let mut sentences = Vec::new();
+    for part in ZH_SENTENCE_SPLIT.split(text) {
         let s = part.trim();
-        // Go: `len(s) > 5` is a BYTE-length check.
-        if !s.is_empty() && s.len() > 5 {
-            sentences.push(s.to_string());
+        if s.is_empty() {
+            continue;
+        }
+        if !has_chinese(s) {
+            sentences.extend(split_english(s));
+        } else if s.contains(['.', '!', '?']) {
+            for sub in SENTENCE_SPLIT.split(s) {
+                push_sentence(&mut sentences, sub);
+            }
+        } else {
+            push_sentence(&mut sentences, s);
         }
     }
     sentences
 }
 
-fn count_imperative_sentences(sentences: &[String]) -> usize {
-    let mut count = 0;
-    for sentence in sentences {
-        let cleaned = LEADING_FORMAT.replace(sentence, "");
-        if let Some(first) = cleaned.split_whitespace().next() {
-            if IMPERATIVE_VERBS.contains(&first.to_lowercase().as_str()) {
-                count += 1;
-            }
-        }
+/// Whether a sentence is imperative (Go `imperativeDetector.isImperative`).
+/// A sentence with Han characters is imperative when it starts with a Chinese
+/// verb or holds a Chinese keyword; any sentence is imperative when its first
+/// word is an English verb.
+fn is_imperative(sentence: &str) -> bool {
+    let cleaned = LEADING_FORMAT.replace(sentence, "");
+    if has_chinese(&cleaned)
+        && (ZH_IMPERATIVE_VERBS.iter().any(|v| cleaned.starts_with(v))
+            || ZH_IMPERATIVE_KEYWORDS.iter().any(|k| cleaned.contains(k)))
+    {
+        return true;
     }
-    count
+    cleaned
+        .split_whitespace()
+        .next()
+        .is_some_and(|first| IMPERATIVE_VERBS.contains(&first.to_lowercase().as_str()))
+}
+
+fn count_imperative_sentences(sentences: &[String]) -> usize {
+    sentences.iter().filter(|s| is_imperative(s)).count()
 }
 
 fn count_marker_matches(text: &str, patterns: &[Regex]) -> usize {
@@ -227,6 +335,85 @@ fn count_marker_matches(text: &str, patterns: &[Regex]) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Ported from upstream v1.8.0 `content/content_test.go`.
+
+    #[test]
+    fn chinese_verbs_start_imperative_sentences() {
+        let r = analyze("使用CLI工具。运行测试。这是一个描述。创建一个新文件。");
+        assert_eq!(r.sentence_count, 4);
+        assert_eq!(r.imperative_count, 3);
+    }
+
+    #[test]
+    fn chinese_keywords_mark_imperatives_anywhere() {
+        assert_eq!(
+            analyze("请确保所有测试通过。务必按照规范操作。").imperative_count,
+            2
+        );
+        assert!(is_imperative("请确保所有测试通过"));
+        assert!(!is_imperative("这只是一个普通句子"));
+    }
+
+    #[test]
+    fn chinese_punctuation_splits_sentences() {
+        assert_eq!(
+            analyze("使用此工具。运行测试！确保正确？配置环境；这是说明。").sentence_count,
+            5
+        );
+    }
+
+    #[test]
+    fn mixed_chinese_and_english() {
+        let r = analyze("Use the CLI tool. 运行测试。Create a new file. 请确保代码质量。");
+        assert_eq!(r.sentence_count, 4);
+        assert_eq!(r.imperative_count, 4);
+        assert_eq!(
+            count_sentences("Use the tool.运行测试。Create a file.").len(),
+            2
+        );
+    }
+
+    #[test]
+    fn non_imperative_chinese() {
+        assert_eq!(
+            analyze("这是一个描述。项目已完成。功能正常工作。").imperative_count,
+            0
+        );
+        assert!(!is_imperative("项目已经完成了"));
+    }
+
+    #[test]
+    fn has_chinese_detects_han() {
+        assert!(!has_chinese("Hello world"));
+        assert!(has_chinese("使用此工具"));
+        assert!(has_chinese("Use 使用 both"));
+        assert!(!has_chinese("12345"));
+        assert!(!has_chinese(""));
+    }
+
+    #[test]
+    fn english_detection_is_unchanged() {
+        assert!(is_imperative("Use the CLI tool"));
+        assert!(!is_imperative("This is a description"));
+        assert!(is_imperative("## Use the tool"));
+        assert!(is_imperative("- Run the tests"));
+        assert!(!is_imperative("**Create** a file"));
+        assert!(is_imperative("  Set the value"));
+    }
+
+    #[test]
+    fn chinese_full_content() {
+        let md =
+            "# 我的技能\n\n## 使用说明\n\n使用CLI工具验证技能。你必须始终在发布前运行测试。\n\n\
+                  ```bash\nskill-validator validate ./my-skill\n```\n\n## 配置\n\n\
+                  创建配置文件。设置输出格式。你可以考虑使用JSON。\n\n\
+                  - 步骤 1：安装\n- 步骤 2：配置\n- 步骤 3：运行\n\n请确保所有检查通过。\n";
+        let r = analyze(md);
+        assert_eq!(r.code_block_count, 1);
+        assert_eq!(r.section_count, 2);
+        assert!(r.imperative_count >= 3, "{r:?}");
+    }
 
     #[test]
     fn empty_content_is_default() {
