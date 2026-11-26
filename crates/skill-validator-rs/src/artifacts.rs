@@ -15,6 +15,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::structure::fsutil::{safe_read, ReadError};
 use crate::types::{Level, ValidationResult};
 
 const CATEGORY: &str = "Artifacts";
@@ -61,15 +62,17 @@ impl ArtifactReport {
 
 /// Validate an explicit list of files (hook mode). For each file the relevant
 /// per-file check runs; when a file is a `skills/<domain>/<skill>/SKILL.md`, the
-/// enclosing skill directory is also validated.
+/// enclosing skill directory is also validated. The files must resolve inside
+/// the current directory (the repository root, where the hook runs).
 pub fn check_files(files: &[PathBuf]) -> ArtifactReport {
     let mut report = ArtifactReport::default();
+    let root = Path::new(".");
     for file in files {
         if !file.is_file() {
             continue;
         }
         let rel = file.to_string_lossy().replace('\\', "/");
-        check_file(&rel, file, &mut report);
+        check_file(root, &rel, file, &mut report);
         if is_skill_md(&rel) {
             if let Some(dir) = file.parent() {
                 check_skill_dir(dir, &mut report);
@@ -93,7 +96,7 @@ pub fn check_tree(root: &Path) -> ArtifactReport {
             || rel.contains("/assets/schemas/")
             || rel.contains("/scripts/")
         {
-            check_file(&rel, file, &mut report);
+            check_file(root, &rel, file, &mut report);
         }
     }
 
@@ -133,7 +136,9 @@ fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) {
         }
         match entry.file_type() {
             Ok(t) if t.is_dir() => collect_files(&path, out),
-            Ok(t) if t.is_file() => out.push(path),
+            // A symlink is collected so the read guard reports it rather than
+            // the scan passing over it; a symlinked directory is not followed.
+            Ok(t) if t.is_file() || t.is_symlink() => out.push(path),
             _ => {}
         }
     }
@@ -145,33 +150,62 @@ fn is_skill_md(rel: &str) -> bool {
     parts.len() == 4 && parts[0] == "skills" && parts[3] == "SKILL.md"
 }
 
-/// Dispatch a single file to its convention check by location.
-fn check_file(rel: &str, path: &Path, report: &mut ArtifactReport) {
-    if rel.contains("/assets/templates/") {
-        check_templates_file(rel, path, report);
-    } else if rel.contains("/assets/schemas/") {
-        check_schemas_file(rel, path, report);
-    } else if rel.contains("/scripts/") {
-        check_scripts_file(rel, path, report);
+/// Dispatch a single file to its convention check by location. The file is
+/// read once, through [`safe_read`] with `root` as the containment boundary.
+fn check_file(root: &Path, rel: &str, path: &Path, report: &mut ArtifactReport) {
+    let check: fn(&str, &Path, Option<&str>, &mut ArtifactReport) =
+        if rel.contains("/assets/templates/") {
+            check_templates_file
+        } else if rel.contains("/assets/schemas/") {
+            check_schemas_file
+        } else if rel.contains("/scripts/") {
+            check_scripts_file
+        } else {
+            return;
+        };
+    let Some(text) = read_artifact(root, rel, path, report) else {
+        return;
+    };
+    check(rel, path, text.as_deref(), report);
+}
+
+/// Read an artifact through [`safe_read`]. A symlink, a file that resolves
+/// outside `root`, or one past the read limit is reported as an error and
+/// returns `None`, so no check runs on it. A file that cannot be read as
+/// UTF-8 text returns `Some(None)`: the checks treat it as empty, as they
+/// did before the guard.
+fn read_artifact(
+    root: &Path,
+    rel: &str,
+    path: &Path,
+    report: &mut ArtifactReport,
+) -> Option<Option<String>> {
+    match safe_read(root, path) {
+        Ok(text) => Some(Some(text)),
+        Err(e @ (ReadError::Unsafe(_) | ReadError::TooLarge(_))) => {
+            report.error(rel, e.to_string());
+            None
+        }
+        Err(ReadError::Io(_)) => Some(None),
     }
 }
 
-fn check_templates_file(rel: &str, path: &Path, report: &mut ArtifactReport) {
+fn check_templates_file(rel: &str, _path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
     if rel.ends_with("/.gitkeep") {
         return;
     }
     if !(rel.ends_with(".yaml") || rel.ends_with(".yml")) {
         return;
     }
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Some(text) = text else {
         return;
     };
     // Skip files that carry templating placeholders (they are not valid YAML by
     // design): `{{ ... }}`, `{% ... %}`, or `[snake_case]` tokens.
-    if text.contains("{{") || text.contains("{%") || has_bracket_token(&text) {
+    if text.contains("{{") || text.contains("{%") || has_bracket_token(text) {
         return;
     }
-    if serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&text).is_err() {
+    if serde_yaml_ng::from_str::<serde_yaml_ng::Value>(text).is_err() {
         report.error(rel, format!("{rel} is not valid YAML."));
     }
 }
@@ -195,7 +229,7 @@ fn has_bracket_token(text: &str) -> bool {
     false
 }
 
-fn check_schemas_file(rel: &str, path: &Path, report: &mut ArtifactReport) {
+fn check_schemas_file(rel: &str, _path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
     if !rel.ends_with(".schema.json") {
         report.error(
             rel,
@@ -203,14 +237,14 @@ fn check_schemas_file(rel: &str, path: &Path, report: &mut ArtifactReport) {
         );
         return;
     }
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Some(text) = text else {
         return;
     };
-    if serde_json::from_str::<serde_json::Value>(&text).is_err() {
+    if serde_json::from_str::<serde_json::Value>(text).is_err() {
         report.error(rel, format!("{rel} is not valid JSON."));
         return;
     }
-    if !declares_schema_url(&text) {
+    if !declares_schema_url(text) {
         report.error(
             rel,
             format!(r#"{rel} does not declare a JSON Schema "$schema" URL from json-schema.org."#),
@@ -232,18 +266,18 @@ fn declares_schema_url(text: &str) -> bool {
     rest.starts_with("\"http://json-schema.org/") || rest.starts_with("\"https://json-schema.org/")
 }
 
-fn check_scripts_file(rel: &str, path: &Path, report: &mut ArtifactReport) {
+fn check_scripts_file(rel: &str, path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
     if rel.contains("/__pycache__/") || rel.ends_with("/.gitkeep") {
         return;
     }
     if rel.ends_with(".sh") {
-        check_shell_script(rel, path, report);
+        check_shell_script(rel, path, text, report);
     } else if rel.ends_with(".py") {
-        check_python_script(rel, path, report);
+        check_python_script(rel, path, text, report);
     } else if rel.ends_with(".ts") {
-        check_ts_script(rel, path, report);
+        check_ts_script(rel, path, text, report);
     } else if rel.ends_with(".js") {
-        check_js_script(rel, path, report);
+        check_js_script(rel, path, text, report);
     } else {
         report.error(
             rel,
@@ -254,15 +288,12 @@ fn check_scripts_file(rel: &str, path: &Path, report: &mut ArtifactReport) {
     }
 }
 
-fn first_line(path: &Path) -> String {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|t| t.lines().next().map(str::to_string))
-        .unwrap_or_default()
+fn first_line(text: Option<&str>) -> &str {
+    text.and_then(|t| t.lines().next()).unwrap_or_default()
 }
 
-fn check_shell_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
-    let shebang = first_line(path);
+fn check_shell_script(rel: &str, path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
+    let shebang = first_line(text);
     let portable_msg = format!(
         "{rel} must start with portable shebang: #!/usr/bin/env sh (or add '# shell: bash' to allow bash)"
     );
@@ -275,9 +306,7 @@ fn check_shell_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
             );
         }
     } else if shebang == "#!/usr/bin/env bash" {
-        let allows_bash = std::fs::read_to_string(path)
-            .map(|t| t.lines().any(|l| l.starts_with("# shell: bash")))
-            .unwrap_or(false);
+        let allows_bash = text.is_some_and(|t| t.lines().any(|l| l.starts_with("# shell: bash")));
         if !allows_bash {
             report.error(rel, portable_msg);
         }
@@ -286,8 +315,8 @@ fn check_shell_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
     }
 }
 
-fn check_python_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
-    let shebang = first_line(path);
+fn check_python_script(rel: &str, path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
+    let shebang = first_line(text);
     if shebang != "#!/usr/bin/env python3" && shebang != "#!/usr/bin/env python" {
         report.error(
             rel,
@@ -300,10 +329,10 @@ fn check_python_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
     }
 }
 
-fn check_ts_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
-    let shebang = first_line(path);
+fn check_ts_script(rel: &str, _path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
+    let shebang = first_line(text);
     let ok = matches!(
-        shebang.as_str(),
+        shebang,
         "#!/usr/bin/env bun" | "#!/usr/bin/env -S bun" | "#!/usr/bin/env -S bun run"
     );
     if !ok {
@@ -314,8 +343,8 @@ fn check_ts_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
     }
 }
 
-fn check_js_script(rel: &str, path: &Path, report: &mut ArtifactReport) {
-    let shebang = first_line(path);
+fn check_js_script(rel: &str, _path: &Path, text: Option<&str>, report: &mut ArtifactReport) {
+    let shebang = first_line(text);
     if shebang != "#!/usr/bin/env node" && shebang != "#!/usr/bin/env bun" {
         report.error(
             rel,
@@ -418,10 +447,10 @@ fn check_assets(dir: &Path, dir_rel: &str, report: &mut ArtifactReport) {
 
 /// Validate SKILL.md size, frontmatter name match, and self-containment.
 fn check_skill_md(dir: &Path, dir_rel: &str, skill_name: &str, report: &mut ArtifactReport) {
-    let Ok(content) = std::fs::read_to_string(dir.join("SKILL.md")) else {
+    let md_rel = format!("{dir_rel}/SKILL.md");
+    let Some(Some(content)) = read_artifact(dir, &md_rel, &dir.join("SKILL.md"), report) else {
         return;
     };
-    let md_rel = format!("{dir_rel}/SKILL.md");
 
     let line_count = content.lines().count();
     if line_count > 500 {
@@ -536,6 +565,10 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+    fn read(path: &Path) -> Option<String> {
+        fs::read_to_string(path).ok()
+    }
+
     fn write(path: &Path, content: &str) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).unwrap();
@@ -555,6 +588,7 @@ mod tests {
         check_schemas_file(
             "skills/d/s/assets/schemas/thing.json",
             &bad_ext,
+            read(&bad_ext).as_deref(),
             &mut report,
         );
         assert_eq!(report.errors(), 1);
@@ -567,7 +601,12 @@ mod tests {
         let f = dir.path().join("x.schema.json");
         write(&f, r#"{"type":"object"}"#);
         let mut report = ArtifactReport::default();
-        check_schemas_file("skills/d/s/assets/schemas/x.schema.json", &f, &mut report);
+        check_schemas_file(
+            "skills/d/s/assets/schemas/x.schema.json",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 1);
         assert!(report.results[0].message.contains("$schema"));
     }
@@ -581,7 +620,12 @@ mod tests {
             r#"{"$schema": "https://json-schema.org/draft-07/schema#","type":"object"}"#,
         );
         let mut report = ArtifactReport::default();
-        check_schemas_file("skills/d/s/assets/schemas/x.schema.json", &f, &mut report);
+        check_schemas_file(
+            "skills/d/s/assets/schemas/x.schema.json",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 0);
     }
 
@@ -591,7 +635,12 @@ mod tests {
         let f = dir.path().join("tool.rb");
         write(&f, "puts 1\n");
         let mut report = ArtifactReport::default();
-        check_scripts_file("skills/d/s/scripts/tool.rb", &f, &mut report);
+        check_scripts_file(
+            "skills/d/s/scripts/tool.rb",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 1);
         assert!(report.results[0].message.contains("recognised script type"));
     }
@@ -602,7 +651,12 @@ mod tests {
         let f = dir.path().join("go.sh");
         write(&f, "#!/bin/bash\necho hi\n");
         let mut report = ArtifactReport::default();
-        check_scripts_file("skills/d/s/scripts/go.sh", &f, &mut report);
+        check_scripts_file(
+            "skills/d/s/scripts/go.sh",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 1);
         assert!(report.results[0].message.contains("portable shebang"));
     }
@@ -613,7 +667,12 @@ mod tests {
         let f = dir.path().join("go.sh");
         write(&f, "#!/usr/bin/env bash\n# shell: bash\necho hi\n");
         let mut report = ArtifactReport::default();
-        check_scripts_file("skills/d/s/scripts/go.sh", &f, &mut report);
+        check_scripts_file(
+            "skills/d/s/scripts/go.sh",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 0);
     }
 
@@ -623,7 +682,12 @@ mod tests {
         let f = dir.path().join("tmpl.yaml");
         write(&f, "name: {{ value }}\n:::not valid yaml:::\n");
         let mut report = ArtifactReport::default();
-        check_templates_file("skills/d/s/assets/templates/tmpl.yaml", &f, &mut report);
+        check_templates_file(
+            "skills/d/s/assets/templates/tmpl.yaml",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 0);
     }
 
@@ -633,7 +697,12 @@ mod tests {
         let f = dir.path().join("tmpl.yaml");
         write(&f, "key: value\n\tbad: indent\n  - nope\n");
         let mut report = ArtifactReport::default();
-        check_templates_file("skills/d/s/assets/templates/tmpl.yaml", &f, &mut report);
+        check_templates_file(
+            "skills/d/s/assets/templates/tmpl.yaml",
+            &f,
+            read(&f).as_deref(),
+            &mut report,
+        );
         assert_eq!(report.errors(), 1);
     }
 
@@ -817,6 +886,62 @@ mod tests {
         write(&skill.join("scripts/.tools/actionlint"), "binary-ish\n");
         let report = check_tree(&dir.path().join("skills"));
         assert_eq!(report.errors(), 0, "{:?}", report.results);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tree_scan_refuses_a_symlinked_script() {
+        let dir = tempdir().unwrap();
+        let outside = dir.path().join("outside.sh");
+        write(&outside, "#!/usr/bin/env sh\necho hi\n");
+        let skill = dir.path().join("skills/d/my-skill");
+        write(&skill.join("SKILL.md"), "---\nname: my-skill\n---\nBody\n");
+        fs::create_dir_all(skill.join("scripts")).unwrap();
+        std::os::unix::fs::symlink(&outside, skill.join("scripts/go.sh")).unwrap();
+        let report = check_tree(&dir.path().join("skills"));
+        assert_eq!(report.errors(), 1, "{:?}", report.results);
+        assert!(report.results[0].message.contains("not a regular file"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_mode_refuses_a_file_outside_the_root() {
+        let dir = tempdir().unwrap();
+        let outside = dir.path().join("outside.sh");
+        write(&outside, "#!/usr/bin/env sh\necho hi\n");
+        let root = dir.path().join("repo");
+        let scripts = root.join("skills/d/s/scripts");
+        fs::create_dir_all(root.join("skills/d/s")).unwrap();
+        // The directory, not the file, is the symlink: the file is regular
+        // but resolves outside the root.
+        std::os::unix::fs::symlink(dir.path(), &scripts).unwrap();
+        let mut report = ArtifactReport::default();
+        check_file(
+            &root,
+            "skills/d/s/scripts/outside.sh",
+            &scripts.join("outside.sh"),
+            &mut report,
+        );
+        assert_eq!(report.errors(), 1, "{:?}", report.results);
+        assert!(report.results[0]
+            .message
+            .contains("outside the skill directory"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_skill_md_is_refused() {
+        let dir = tempdir().unwrap();
+        let outside = dir.path().join("elsewhere.md");
+        write(&outside, "---\nname: wrong\n---\nSee ../x\n");
+        let skill = dir.path().join("skills/d/my-skill");
+        fs::create_dir_all(&skill).unwrap();
+        std::os::unix::fs::symlink(&outside, skill.join("SKILL.md")).unwrap();
+        let mut report = ArtifactReport::default();
+        check_skill_dir(&skill, &mut report);
+        // One refusal, not the name and parent-reference findings of the target.
+        assert_eq!(report.errors(), 1, "{:?}", report.results);
+        assert!(report.results[0].message.contains("not a regular file"));
     }
 
     #[test]

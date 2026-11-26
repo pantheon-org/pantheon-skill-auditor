@@ -104,7 +104,10 @@ pub fn load_dir(dir: &Path) -> Result<Vec<(String, ProbeFile)>, String> {
         .map_err(|e| format!("reading {}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| {
-            p.is_file()
+            // `exists` follows a symlink, so a symlinked probe file reaches the
+            // read below and is refused there instead of being skipped.
+            p.exists()
+                && !p.is_dir()
                 && p.extension().is_some_and(|x| x == "json")
                 && !p
                     .file_name()
@@ -115,7 +118,8 @@ pub fn load_dir(dir: &Path) -> Result<Vec<(String, ProbeFile)>, String> {
     let mut out = Vec::new();
     for path in names {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        let text = std::fs::read_to_string(&path).map_err(|e| format!("reading {name}: {e}"))?;
+        let text = crate::structure::fsutil::safe_read(dir, &path)
+            .map_err(|e| format!("reading {name}: {e}"))?;
         let probe: ProbeFile =
             serde_json::from_str(&text).map_err(|e| format!("parsing {name}: {e}"))?;
         out.push((name, probe));
@@ -827,5 +831,19 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].0, "one.json");
         assert!(load_dir(&tmp.path().join("baselines")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn load_dir_refuses_a_symlinked_probe_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = probe(vec![q("a", Split::Train, true, "x")]);
+        let outside = tmp.path().join("outside.json");
+        fs::write(&outside, serde_json::to_string(&p).unwrap()).unwrap();
+        let dir = tmp.path().join("probes");
+        fs::create_dir_all(&dir).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("one.json")).unwrap();
+        let err = load_dir(&dir).unwrap_err();
+        assert!(err.contains("not a regular file"), "{err}");
     }
 }
