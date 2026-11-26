@@ -17,6 +17,7 @@ mod run;
 use std::ffi::{OsStr, OsString};
 use std::process::ExitCode;
 
+use crate::structure::paths::normalize_relative_paths;
 use crate::Options;
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
@@ -40,6 +41,16 @@ struct Cli {
     /// Directory names accepted without warning (comma-separated, repeatable).
     #[arg(long, global = true, value_delimiter = ',', value_name = "CSV")]
     allow_dirs: Vec<String>,
+
+    /// Skill-relative paths where deep nesting is allowed (comma-separated,
+    /// repeatable), e.g. `--allow-nested-paths=assets/components`.
+    #[arg(long, global = true, value_delimiter = ',', value_name = "CSV")]
+    allow_nested_paths: Vec<String>,
+
+    /// Skill-relative subtrees to exclude from non-standard token accounting
+    /// (comma-separated, repeatable), e.g. `--exclude-token-paths=site`.
+    #[arg(long, global = true, value_delimiter = ',', value_name = "CSV")]
+    exclude_token_paths: Vec<String>,
 
     /// Analyse each reference file individually (`check` only).
     #[arg(long, global = true)]
@@ -154,13 +165,21 @@ enum AnalyzeGroup {
 }
 
 impl Cli {
-    fn options(&self) -> Options {
-        Options {
+    /// The check options. A path flag that is not a path below the skill
+    /// root is a usage error (Go `NormalizeRelativePaths` in `cmd/`).
+    fn options(&self) -> Result<Options, String> {
+        let nested = normalize_relative_paths(&self.allow_nested_paths)
+            .map_err(|e| format!("invalid --allow-nested-paths: {e}"))?;
+        let excluded = normalize_relative_paths(&self.exclude_token_paths)
+            .map_err(|e| format!("invalid --exclude-token-paths: {e}"))?;
+        Ok(Options {
             skip_orphans: self.skip_orphans,
             allow_extra_frontmatter: self.allow_extra_frontmatter,
             allow_flat_layouts: self.allow_flat_layouts,
             allow_dirs: self.allow_dirs.clone(),
-        }
+            allow_nested_paths: nested,
+            exclude_token_paths: excluded,
+        })
     }
 }
 
@@ -188,7 +207,15 @@ where
         return probes_cmd::run(action);
     }
 
-    match dispatch(&cli) {
+    let opts = match cli.options() {
+        Ok(opts) => opts,
+        Err(message) => {
+            eprintln!("error: {message}");
+            return 3;
+        }
+    };
+
+    match dispatch(&cli, &opts) {
         Ok((report, gated)) => finish(&cli, &report, gated),
         Err(message) => {
             eprintln!("error: {message}");
@@ -254,15 +281,15 @@ where
 
 /// Run the selected command. The bool is whether the exit code is gated on the
 /// report's findings (`false` for pure analysis, which is always exit 0).
-fn dispatch(cli: &Cli) -> Result<(CliReport, bool), String> {
+fn dispatch(cli: &Cli, opts: &Options) -> Result<(CliReport, bool), String> {
     match &cli.command {
         Command::Validate {
             group: ValidateGroup::Structure { dir },
-        } => Ok((run::validate_structure(dir, &cli.options()), true)),
+        } => Ok((run::validate_structure(dir, opts), true)),
         Command::Validate {
             group: ValidateGroup::Artifacts { paths },
         } => Ok((run::validate_artifacts(paths), true)),
-        Command::Check { dir } => Ok((run::check(dir, &cli.options(), cli.per_file), true)),
+        Command::Check { dir } => Ok((run::check(dir, opts, cli.per_file), true)),
         Command::Probes { .. } => unreachable!("handled before dispatch"),
         Command::Analyze {
             group: AnalyzeGroup::Content { dir },

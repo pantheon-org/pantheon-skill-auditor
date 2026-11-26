@@ -575,3 +575,110 @@ fn analyze_triggers_reads_a_triggers_marker() {
         serde_json::json!(["citation analysis", "paper by doi", "search papers"])
     );
 }
+
+/// A skill with a nested `assets/components/button/` directory and a
+/// non-standard `site/` tree (ported from upstream v1.8.0's flag tests).
+fn nested_skill() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let write = |rel: &str, body: &str| {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    };
+    write(
+        "SKILL.md",
+        "---\nname: PLACEHOLDER\ndescription: A test skill. Use when testing flags.\n---\n# Skill\n\nUse it.\n",
+    );
+    write(
+        "assets/components/button/index.html",
+        "<button>hi</button>\n",
+    );
+    write("site/index.md", "Site page.\n");
+    write("site/docs/page.md", "Another page.\n");
+    write("other/keep.md", "Counted.\n");
+    let name = root.file_name().unwrap().to_str().unwrap().to_string();
+    let skill = std::fs::read_to_string(root.join("SKILL.md")).unwrap();
+    std::fs::write(root.join("SKILL.md"), skill.replace("PLACEHOLDER", &name)).unwrap();
+    tmp
+}
+
+#[test]
+fn allow_nested_paths_turns_the_nesting_warning_into_info() {
+    let tmp = nested_skill();
+    let path = tmp.path().to_str().unwrap();
+
+    let without = stdout(&run(&["validate", "structure", "-o", "json", path]));
+    assert!(
+        without.contains("deep nesting detected: assets/components/"),
+        "{without}"
+    );
+
+    let with = stdout(&run(&[
+        "validate",
+        "structure",
+        "-o",
+        "json",
+        "--allow-nested-paths=assets/components",
+        path,
+    ]));
+    assert!(
+        !with.contains("deep nesting detected: assets/components/"),
+        "{with}"
+    );
+    assert!(
+        with.contains("deep nesting allowed: assets/components/"),
+        "{with}"
+    );
+}
+
+#[test]
+fn exclude_token_paths_drops_the_subtree_from_other_counts() {
+    let tmp = nested_skill();
+    let path = tmp.path().to_str().unwrap();
+
+    let out = stdout(&run(&[
+        "validate",
+        "structure",
+        "-o",
+        "json",
+        "--exclude-token-paths=site/docs,unused",
+        path,
+    ]));
+    let json: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let files: Vec<&str> = json["other_token_counts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["File"].as_str().unwrap())
+        .collect();
+    assert_eq!(files, vec!["other/keep.md", "site/index.md"], "{out}");
+    // Only a subtree that excluded something is reported.
+    assert!(
+        out.contains("excluded from token accounting: site/docs"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("excluded from token accounting: unused"),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_path_flag_outside_the_skill_is_a_usage_error() {
+    let tmp = nested_skill();
+    let path = tmp.path().to_str().unwrap();
+    for flag in [
+        "--allow-nested-paths=../x",
+        "--exclude-token-paths=/abs",
+        "--exclude-token-paths=.",
+    ] {
+        let out = run(&["check", flag, path]);
+        assert_eq!(
+            code(&out),
+            3,
+            "{flag}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}

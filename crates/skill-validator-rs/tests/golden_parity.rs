@@ -153,6 +153,7 @@ fn actual_structure(dir: &Path) -> StructOut {
             allow_flat_layouts: true,
             allow_extra_frontmatter: true,
             allow_dirs: Vec::new(),
+            ..Options::default()
         },
     );
     StructOut {
