@@ -19,6 +19,7 @@ pub mod discovery;
 pub mod links;
 pub mod listing;
 pub mod probes;
+pub mod security;
 pub mod skill;
 pub mod structure;
 pub mod triggers;

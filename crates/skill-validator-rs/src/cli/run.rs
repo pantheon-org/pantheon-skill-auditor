@@ -28,6 +28,19 @@ pub fn validate_structure(dir: &str, opts: &Options) -> CliReport {
     }
 }
 
+/// Run `validate security <dir>`: the offline security checks.
+pub fn validate_security(dir: &str) -> CliReport {
+    let results = crate::security::check_security(Path::new(dir));
+    let count = |level| results.iter().filter(|r| r.level == level).count();
+    CliReport {
+        skill_dir: dir.to_string(),
+        errors: count(crate::Level::Error),
+        warnings: count(crate::Level::Warning),
+        results,
+        ..CliReport::default()
+    }
+}
+
 /// Run `check <dir>`: the structure group plus content and contamination
 /// analysis of SKILL.md, and (when `per_file`) of each reference file.
 pub fn check(dir: &str, opts: &Options, per_file: bool) -> CliReport {
