@@ -62,6 +62,31 @@ pub struct ReferenceReport {
     pub contamination: Option<ContaminationReport>,
 }
 
+/// Reports for several skills found below one path (`--max-depth`
+/// discovery, upstream v1.8.0), with totals across them.
+#[derive(Debug, Default, Serialize)]
+pub struct MultiCliReport {
+    /// One report per skill, in sorted path order.
+    pub skills: Vec<CliReport>,
+    /// Total error-level results across all skills.
+    pub errors: usize,
+    /// Total warning-level results across all skills.
+    pub warnings: usize,
+}
+
+impl MultiCliReport {
+    /// Collect `skills` and total their counts.
+    pub fn new(skills: Vec<CliReport>) -> Self {
+        let errors = skills.iter().map(|s| s.errors).sum();
+        let warnings = skills.iter().map(|s| s.warnings).sum();
+        Self {
+            skills,
+            errors,
+            warnings,
+        }
+    }
+}
+
 /// How the report is rendered to stdout (`-o/--output`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "lowercase")]

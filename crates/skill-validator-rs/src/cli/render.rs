@@ -7,7 +7,7 @@ use crate::listing::ListingReport;
 use crate::triggers::TriggerReport;
 use crate::{ContaminationReport, ContentReport, Level, ValidationResult};
 
-use crate::cli::model::{CliReport, OutputFormat};
+use crate::cli::model::{CliReport, MultiCliReport, OutputFormat};
 
 /// Render `report` in the requested `format` and return the string to print to
 /// stdout. Pass results are omitted from text and markdown to keep the gate
@@ -18,6 +18,77 @@ pub fn render(report: &CliReport, format: OutputFormat) -> String {
         OutputFormat::Json => render_json(report),
         OutputFormat::Markdown => render_markdown(report),
     }
+}
+
+/// Render several skills' reports: each one as [`render`] would, then the
+/// totals (Go `PrintMulti` / `PrintMultiMarkdown` / `PrintMultiJSON`).
+pub fn render_multi(multi: &MultiCliReport, format: OutputFormat) -> String {
+    match format {
+        OutputFormat::Json => {
+            serde_json::to_string_pretty(multi).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"))
+        }
+        OutputFormat::Text => {
+            let rule = "━".repeat(60);
+            let mut out = String::new();
+            for (i, r) in multi.skills.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(&format!("{rule}\n"));
+                }
+                out.push_str(&render_text(r));
+            }
+            out.push_str(&format!("{rule}\n{}", multi_summary(multi, false)));
+            out
+        }
+        OutputFormat::Markdown => {
+            let mut out = String::new();
+            for (i, r) in multi.skills.iter().enumerate() {
+                if i > 0 {
+                    out.push_str("\n---\n\n");
+                }
+                out.push_str(&render_markdown(r));
+            }
+            out.push_str(&format!("\n---\n\n{}", multi_summary(multi, true)));
+            out
+        }
+    }
+}
+
+/// "N skills validated: all passed" (or "x passed, y failed"), then the
+/// totals; a skill passes when it has no errors.
+fn multi_summary(multi: &MultiCliReport, markdown: bool) -> String {
+    let n = multi.skills.len();
+    let failed = multi.skills.iter().filter(|s| s.errors > 0).count();
+    let passed = n - failed;
+    let verdict = if failed == 0 {
+        "all passed".to_string()
+    } else if passed > 0 {
+        format!("{passed} passed, {failed} failed")
+    } else {
+        format!("{failed} failed")
+    };
+    let totals = format!(
+        "{} error{}, {} warning{}",
+        multi.errors,
+        plural(multi.errors),
+        multi.warnings,
+        plural(multi.warnings),
+    );
+    if markdown {
+        format!(
+            "**{n} skill{} validated: {verdict}**\n\n**Total: {totals}**\n",
+            plural(n)
+        )
+    } else {
+        format!(
+            "{n} skill{} validated: {verdict}\nTotal: {totals}\n",
+            plural(n)
+        )
+    }
+}
+
+/// Annotation lines for every skill in `multi`.
+pub fn render_multi_annotations(multi: &MultiCliReport) -> String {
+    multi.skills.iter().map(render_annotations).collect()
 }
 
 fn render_json(report: &CliReport) -> String {

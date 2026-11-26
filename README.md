@@ -31,6 +31,10 @@ Until this repository has its own release, the latest is
 - run: pantheon-skill-auditor validate structure --allow-dirs=evals path/to/skill
 ```
 
+`validate structure`, `check` and `analyze content` also take a directory of skills. When the path has no
+`SKILL.md`, every skill up to six levels below it is checked and the report ends with totals; `--max-depth=N`
+changes the depth, and `--max-depth=0` checks the path alone.
+
 ## Shell completion
 
 `pantheon-skill-auditor completion <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell` or
