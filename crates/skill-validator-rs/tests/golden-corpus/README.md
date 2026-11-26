@@ -43,8 +43,9 @@ independent (every `File` field is already relative to the skill dir).
   multi-skill children, review-skill) plus the multi-skill PARENT dir to
   exercise the SKILL.md-not-found path.
 - 9 section-6 boundary fixtures under `fixtures/boundary/`: description at 1024
-  bytes (valid) and 1025 bytes (error) with multibyte glyphs (byte-length, not
-  rune-length); name at 64 bytes (valid) and 65 bytes (error); SKILL.md body at
+  characters (valid) and 1025 characters (error), each with multibyte glyphs so
+  it is longer in bytes than in characters (limits count characters since
+  upstream v1.6.2); name at 64 characters (valid) and 65 (error); SKILL.md body at
   500 lines (no warn) and 501 lines (warn); an unclosed code fence; an internal
   `../` traversal link (Links warning); and a keyword-stuffed description.
 - 129 real tekhne skills, the `skills/**/SKILL.md` tree across every populated
@@ -56,7 +57,7 @@ independent (every `File` field is already relative to the skill dir).
 Token-threshold boundaries above 5000 body tokens and the reference-file /
 reference-total / other-total thresholds are not hand-tuned N/N+1 fixtures here:
 token counts are already proven bit-exact by `token_parity.rs`, the threshold
-comparisons are shared code, and the real corpus plus the line/byte boundary
+comparisons are shared code, and the real corpus plus the line/character boundary
 fixtures exercise the surrounding branches. The one body-token warn branch that
 no fixture pins deterministically is noted rather than papered over.
 

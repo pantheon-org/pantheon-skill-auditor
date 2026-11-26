@@ -3,7 +3,9 @@
 
 use std::path::Path;
 
-use super::fsutil::{read_dir_sorted, read_file};
+use super::fsutil::{
+    format_byte_size, read_dir_sorted, safe_read, ReadError, MAX_SKILL_FILE_BYTES,
+};
 use crate::types::{ResultContext, ValidationResult};
 
 /// Check SKILL.md and reference `.md` files for unclosed fences
@@ -33,16 +35,27 @@ pub fn check_markdown(dir: &Path, body: &str) -> Vec<ValidationResult> {
     }
 
     for e in entries {
-        if e.is_dir || e.name.starts_with('.') {
+        if e.is_dir || e.name.starts_with('.') || !e.is_regular {
             continue;
         }
         if !e.name.to_lowercase().ends_with(".md") {
             continue;
         }
-        let Some(data) = read_file(&e.path) else {
-            continue;
-        };
         let rel = format!("references/{}", e.name);
+        let data = match safe_read(dir, &e.path) {
+            Ok(data) => data,
+            Err(ReadError::TooLarge(_)) => {
+                results.push(ctx.warn_file(
+                    &rel,
+                    format!(
+                        "{rel} is larger than {}; skipped the unclosed code fence check",
+                        format_byte_size(MAX_SKILL_FILE_BYTES)
+                    ),
+                ));
+                continue;
+            }
+            Err(_) => continue,
+        };
         if let Some(line) = find_unclosed_fence(&data) {
             results.push(ctx.error_at_line(
                 &rel,

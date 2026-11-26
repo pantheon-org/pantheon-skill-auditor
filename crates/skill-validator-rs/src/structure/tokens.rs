@@ -9,7 +9,10 @@ use std::sync::LazyLock;
 
 use tiktoken_rs::CoreBPE;
 
-use super::fsutil::{ext_lower, is_binary_ext, read_dir_sorted, read_file, rel_slash, walk_files};
+use super::fsutil::{
+    ext_lower, format_byte_size, is_binary_ext, read_dir_sorted, rel_slash, safe_read_n,
+    walk_files, ReadError, MAX_SKILL_FILE_BYTES,
+};
 use super::Options;
 use crate::types::{ResultContext, TokenCount, ValidationResult};
 use crate::util::format_number;
@@ -20,6 +23,31 @@ const REF_TOTAL_SOFT_LIMIT: usize = 25_000;
 const REF_TOTAL_HARD_LIMIT: usize = 50_000;
 const OTHER_TOTAL_SOFT_LIMIT: usize = 25_000;
 const OTHER_TOTAL_HARD_LIMIT: usize = 100_000;
+
+/// Read at most [`MAX_SKILL_FILE_BYTES`] of a file for token counting
+/// (Go `readFileWithCap`): a larger file is counted on that prefix and flagged.
+fn read_capped(root: &Path, path: &Path) -> Result<(String, bool), ReadError> {
+    safe_read_n(root, path, MAX_SKILL_FILE_BYTES)
+}
+
+/// Flag every count that covers only a prefix of its file
+/// (Go `truncationNotes`).
+fn truncation_notes(ctx: &ResultContext, counts: &[TokenCount]) -> Vec<ValidationResult> {
+    let limit = format_byte_size(MAX_SKILL_FILE_BYTES);
+    counts
+        .iter()
+        .filter(|tc| tc.truncated)
+        .map(|tc| {
+            ctx.warn_file(
+                &tc.file,
+                format!(
+                    "{} is larger than {limit}; its token count covers only the first {limit}",
+                    tc.file
+                ),
+            )
+        })
+        .collect()
+}
 
 static ENCODER: LazyLock<CoreBPE> =
     LazyLock::new(|| tiktoken_rs::o200k_base().expect("load o200k_base"));
@@ -62,6 +90,7 @@ pub fn check_tokens(
     counts.push(TokenCount {
         file: "SKILL.md body".to_string(),
         tokens: body_count,
+        truncated: false,
     });
     if body_count > 5000 {
         results.push(ctx.warn_file(
@@ -85,14 +114,26 @@ pub fn check_tokens(
             continue;
         }
         let rel = format!("references/{}", e.name);
-        let Some(data) = read_file(&e.path) else {
-            results.push(ctx.warn_file(&rel, format!("could not read {rel}")));
+        if !e.is_regular {
+            results.push(ctx.warn_file(&rel, format!("skipping non-regular file: {rel}")));
             continue;
+        }
+        let (data, truncated) = match read_capped(dir, &e.path) {
+            Ok(read) => read,
+            Err(ReadError::Unsafe(err)) => {
+                results.push(ctx.warn_file(&rel, format!("could not read {rel}: {err}")));
+                continue;
+            }
+            Err(_) => {
+                results.push(ctx.warn_file(&rel, format!("could not read {rel}")));
+                continue;
+            }
         };
         let file_tokens = count_tokens(&data);
         counts.push(TokenCount {
             file: rel.clone(),
             tokens: file_tokens,
+            truncated,
         });
         ref_total += file_tokens;
         push_ref_file_limit(&ctx, &mut results, &rel, file_tokens);
@@ -142,6 +183,9 @@ pub fn check_tokens(
     // Text assets, appended last.
     counts.extend(count_asset_files(dir));
 
+    results.extend(truncation_notes(&ctx, &counts));
+    results.extend(truncation_notes(&ctx, &other_counts));
+
     (results, counts, other_counts)
 }
 
@@ -183,12 +227,13 @@ fn count_asset_files(dir: &Path) -> Vec<TokenCount> {
         if !TEXT_ASSET_EXTENSIONS.contains(&ext_lower(&name).as_str()) {
             continue;
         }
-        let Some(data) = read_file(&path) else {
+        let Ok((data, truncated)) = read_capped(dir, &path) else {
             continue;
         };
         counts.push(TokenCount {
             file: rel_slash(dir, &path),
             tokens: count_tokens(&data),
+            truncated,
         });
     }
     counts
@@ -214,15 +259,19 @@ fn count_other_files(dir: &Path, opts: &Options) -> Vec<TokenCount> {
                 if is_binary_ext(&fname) {
                     continue;
                 }
-                let Some(data) = read_file(&path) else {
+                let Ok((data, truncated)) = read_capped(dir, &path) else {
                     continue;
                 };
                 counts.push(TokenCount {
                     file: rel_slash(dir, &path),
                     tokens: count_tokens(&data),
+                    truncated,
                 });
             }
         } else {
+            if !e.is_regular {
+                continue;
+            }
             if STANDARD_ROOT_FILES.contains(&e.name.to_lowercase().as_str())
                 || opts.allow_flat_layouts
             {
@@ -231,12 +280,13 @@ fn count_other_files(dir: &Path, opts: &Options) -> Vec<TokenCount> {
             if is_binary_ext(&e.name) {
                 continue;
             }
-            let Some(data) = read_file(&e.path) else {
+            let Ok((data, truncated)) = read_capped(dir, &e.path) else {
                 continue;
             };
             counts.push(TokenCount {
                 file: e.name.clone(),
                 tokens: count_tokens(&data),
+                truncated,
             });
         }
     }
@@ -246,7 +296,7 @@ fn count_other_files(dir: &Path, opts: &Options) -> Vec<TokenCount> {
 fn count_root_files(dir: &Path) -> Vec<TokenCount> {
     let mut counts = Vec::new();
     for e in read_dir_sorted(dir) {
-        if e.is_dir || e.name.starts_with('.') {
+        if e.is_dir || e.name.starts_with('.') || !e.is_regular {
             continue;
         }
         if STANDARD_ROOT_FILES.contains(&e.name.to_lowercase().as_str()) {
@@ -255,12 +305,13 @@ fn count_root_files(dir: &Path) -> Vec<TokenCount> {
         if is_binary_ext(&e.name) {
             continue;
         }
-        let Some(data) = read_file(&e.path) else {
+        let Ok((data, truncated)) = read_capped(dir, &e.path) else {
             continue;
         };
         counts.push(TokenCount {
             file: e.name.clone(),
             tokens: count_tokens(&data),
+            truncated,
         });
     }
     counts

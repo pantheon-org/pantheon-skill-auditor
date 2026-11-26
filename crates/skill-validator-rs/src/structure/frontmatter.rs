@@ -1,8 +1,9 @@
 //! Frontmatter validation (Go `structure/frontmatter.go`): required fields,
-//! byte-length limits, the name pattern, keyword-stuffing heuristics, and
-//! unrecognised/metadata field checks. Length limits are byte lengths, matching
-//! Go's `len(string)`. The `description: (N chars)` message is parsed verbatim
-//! by the auditor, so it is emitted exactly.
+//! length limits, the name pattern, keyword-stuffing heuristics, and
+//! unrecognised/metadata field checks. Length limits count characters (Unicode
+//! code points), as upstream v1.6.2 and the spec's `skills-ref` validator do.
+//! The `description: (N chars)` message is parsed verbatim by the auditor, so it
+//! is emitted exactly.
 
 use std::path::Path;
 use std::sync::LazyLock;
@@ -23,10 +24,11 @@ static QUOTED_STRING: LazyLock<Regex> =
 
 const MIN_QUOTED_STRINGS: usize = 5;
 const MIN_COMMA_SEGMENTS: usize = 8;
-/// The spec's description maximum. Measured in bytes, like the error it guards
-/// (Go `len(string)`), so a non-ASCII description reaches it sooner.
+/// The spec's field maxima, in characters (Unicode code points).
+const NAME_MAX: usize = 64;
 const DESCRIPTION_MAX: usize = 1024;
-/// A description within this many bytes of the maximum gets a warning.
+const COMPATIBILITY_MAX: usize = 500;
+/// A description within this many characters of the maximum gets a warning.
 const DESCRIPTION_WARN_MARGIN: usize = 32;
 const MAX_SHORT_SEGMENT_PCT: usize = 60;
 const MIN_AVG_WORDS_PER_SEGMENT: usize = 3;
@@ -56,8 +58,9 @@ pub fn check_frontmatter(s: &Skill, opts: &Options) -> Vec<ValidationResult> {
     if name.is_empty() {
         results.push(ctx.error("name is required"));
     } else {
-        if name.len() > 64 {
-            results.push(ctx.error(format!("name exceeds 64 characters ({})", name.len())));
+        let n = name.chars().count();
+        if n > NAME_MAX {
+            results.push(ctx.error(format!("name exceeds {NAME_MAX} characters ({n})")));
         }
         if !NAME_PATTERN.is_match(name) {
             results.push(ctx.error(format!(
@@ -86,23 +89,22 @@ pub fn check_frontmatter(s: &Skill, opts: &Options) -> Vec<ValidationResult> {
 
     // description
     let desc = &s.frontmatter.description;
+    let desc_chars = desc.chars().count();
     if desc.is_empty() {
         results.push(ctx.error("description is required"));
-    } else if desc.len() > DESCRIPTION_MAX {
+    } else if desc_chars > DESCRIPTION_MAX {
         results.push(ctx.error(format!(
-            "description exceeds {DESCRIPTION_MAX} characters ({})",
-            desc.len()
+            "description exceeds {DESCRIPTION_MAX} characters ({desc_chars})"
         )));
     } else if desc.trim().is_empty() {
         results.push(ctx.error("description must not be empty/whitespace-only"));
     } else {
-        results.push(ctx.pass(format!("description: ({} chars)", desc.len())));
-        if desc.len() > DESCRIPTION_MAX - DESCRIPTION_WARN_MARGIN {
+        results.push(ctx.pass(format!("description: ({desc_chars} chars)")));
+        if desc_chars > DESCRIPTION_MAX - DESCRIPTION_WARN_MARGIN {
             results.push(ctx.warn(format!(
-                "description is {} of {DESCRIPTION_MAX} characters, {} left; the next added \
+                "description is {desc_chars} of {DESCRIPTION_MAX} characters, {} left; the next added \
                  trigger phrase may breach the limit",
-                desc.len(),
-                DESCRIPTION_MAX - desc.len()
+                DESCRIPTION_MAX - desc_chars
             )));
         }
         results.extend(check_description_keyword_stuffing(&ctx, desc));
@@ -116,13 +118,13 @@ pub fn check_frontmatter(s: &Skill, opts: &Options) -> Vec<ValidationResult> {
     // compatibility
     let compat = &s.frontmatter.compatibility;
     if !compat.is_empty() {
-        if compat.len() > 500 {
+        let n = compat.chars().count();
+        if n > COMPATIBILITY_MAX {
             results.push(ctx.error(format!(
-                "compatibility exceeds 500 characters ({})",
-                compat.len()
+                "compatibility exceeds {COMPATIBILITY_MAX} characters ({n})"
             )));
         } else {
-            results.push(ctx.pass(format!("compatibility: ({} chars)", compat.len())));
+            results.push(ctx.pass(format!("compatibility: ({n} chars)")));
         }
     }
 
@@ -482,6 +484,63 @@ mod tests {
                 "Supports caching.".to_string(),
             ]
         );
+    }
+
+    fn load(root: &Path, frontmatter: &str) -> Skill {
+        let dir = root.join("demo");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: demo\n{frontmatter}---\n# Body\n"),
+        )
+        .unwrap();
+        Skill::load(&dir).unwrap()
+    }
+
+    #[test]
+    fn length_limits_count_characters_not_bytes() {
+        // 1000 CJK characters are 3000 UTF-8 bytes: within the 1024-character
+        // limit (upstream v1.6.2, issue #94).
+        let root = tempdir().unwrap();
+        let desc = "\u{6280}".repeat(1000);
+        let s = load(root.path(), &format!("description: {desc}\n"));
+        let msgs: Vec<String> = check_frontmatter(&s, &Options::default())
+            .into_iter()
+            .map(|r| r.message)
+            .collect();
+        assert!(
+            msgs.contains(&"description: (1000 chars)".to_string()),
+            "{msgs:?}"
+        );
+        assert!(!msgs.iter().any(|m| m.contains("exceeds")), "{msgs:?}");
+
+        let over = "\u{6280}".repeat(1025);
+        let s = load(root.path(), &format!("description: {over}\n"));
+        let msgs: Vec<String> = check_frontmatter(&s, &Options::default())
+            .into_iter()
+            .map(|r| r.message)
+            .collect();
+        assert!(
+            msgs.contains(&"description exceeds 1024 characters (1025)".to_string()),
+            "{msgs:?}"
+        );
+    }
+
+    #[test]
+    fn non_string_metadata_loads_and_is_reported_per_key() {
+        // Upstream v1.6.1 (issue #92): a nested metadata value no longer fails
+        // the load; it is reported by the frontmatter check instead.
+        let root = tempdir().unwrap();
+        let s = load(
+            root.path(),
+            "description: A demo skill.\nmetadata:\n  tags: [a, b]\n  owner: me\n",
+        );
+        let errors: Vec<String> = check_frontmatter(&s, &Options::default())
+            .into_iter()
+            .filter(|r| r.level == crate::types::Level::Error)
+            .map(|r| r.message)
+            .collect();
+        assert_eq!(errors, vec![r#"metadata["tags"] value must be a string"#]);
     }
 
     #[test]

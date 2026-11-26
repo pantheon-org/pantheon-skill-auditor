@@ -25,7 +25,7 @@ crates/skill-validator-rs/tests/golden-corpus/fixtures/testdata/warnings-only-sk
 # multi-skill PARENT (no SKILL.md at this level: exercises not-found path)
 crates/skill-validator-rs/tests/golden-corpus/fixtures/testdata/multi-skill
 #
-# --- Section-6 boundary fixtures (byte/line thresholds, fences, links, keyword-stuffing) ---
+# --- Section-6 boundary fixtures (character/line thresholds, fences, links, keyword-stuffing) ---
 crates/skill-validator-rs/tests/golden-corpus/fixtures/boundary/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 crates/skill-validator-rs/tests/golden-corpus/fixtures/boundary/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 crates/skill-validator-rs/tests/golden-corpus/fixtures/boundary/body-500-lines
