@@ -54,7 +54,6 @@ struct Rule {
 }
 
 const RULES: &[Rule] = &[
-    // ---- Errors -----------------------------------------------------------
     Rule {
         id: "SEC001",
         level: Level::Error,
@@ -113,7 +112,6 @@ const RULES: &[Rule] = &[
         what: "runs code it decodes or downloads without showing it",
         fix: "ship the code as readable text, or download it, read it, then run it",
     },
-    // ---- Warnings ---------------------------------------------------------
     Rule {
         id: "SEC020",
         level: Level::Warning,
@@ -366,8 +364,8 @@ fn is_comment(line: &str) -> bool {
         || t.starts_with("<!--")
 }
 
-/// Whether `re` matches `line`, ignoring documentation placeholders such as
-/// AWS's `AKIAIOSFODNN7EXAMPLE`.
+/// Whether `re` matches `line`, ignoring a match that contains `EXAMPLE`
+/// (the placeholder keys in AWS's documentation end that way).
 fn matches(re: &Regex, line: &str) -> bool {
     re.find_iter(line).any(|m| !m.as_str().contains("EXAMPLE"))
 }
@@ -657,12 +655,11 @@ mod tests {
 
     #[test]
     fn secrets_and_keys() {
-        assert_eq!(
-            ids("SKILL.md", "key: AKIAQWERTYUIOPASDFGH\n"),
-            vec!["SEC003"]
-        );
-        // AWS's documentation placeholder is not a secret.
-        assert!(ids("SKILL.md", "key: AKIAIOSFODNN7EXAMPLE\n").is_empty());
+        // Built at run time so this source holds no key-shaped literal.
+        let aws = |rest: &str| format!("key: {}{rest}\n", ["AK", "IA"].concat());
+        assert_eq!(ids("SKILL.md", &aws("QWERTYUIOPASDFGH")), vec!["SEC003"]);
+        // AWS's documentation placeholder (ending in EXAMPLE) is not a secret.
+        assert!(ids("SKILL.md", &aws("IOSFODNN7EXAMPLE")).is_empty());
         let token = format!("token ghp_{}\n", "a".repeat(36));
         assert_eq!(ids("references/x.md", &token), vec!["SEC003"]);
         assert_eq!(
