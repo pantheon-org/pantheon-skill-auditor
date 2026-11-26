@@ -84,6 +84,18 @@ pub fn analyze_content_cmd(dir: &str) -> Result<CliReport, String> {
     })
 }
 
+/// `analyze content` for one of several discovered skills: a skill that
+/// does not load is reported as an error on its own report instead of
+/// ending the run (Go `orchestrate.RunContentAnalysis`).
+pub fn analyze_content_report(dir: &str) -> CliReport {
+    analyze_content_cmd(dir).unwrap_or_else(|message| CliReport {
+        skill_dir: dir.to_string(),
+        results: vec![crate::types::ResultContext::new("Content").error(message)],
+        errors: 1,
+        ..CliReport::default()
+    })
+}
+
 /// Run `analyze triggers <dir> --base <dir>`: trigger-phrase drift.
 pub fn analyze_triggers_cmd(dir: &str, base: &str) -> Result<CliReport, String> {
     let report = crate::triggers::compare(Path::new(dir), Path::new(base))?;

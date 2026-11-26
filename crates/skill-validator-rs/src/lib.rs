@@ -15,6 +15,7 @@ pub mod artifacts;
 pub mod cli;
 pub mod contamination;
 pub mod content;
+pub mod discovery;
 pub mod links;
 pub mod listing;
 pub mod probes;

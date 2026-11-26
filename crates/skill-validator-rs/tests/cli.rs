@@ -682,3 +682,103 @@ fn a_path_flag_outside_the_skill_is_a_usage_error() {
         );
     }
 }
+
+/// A parent directory holding two skills at different depths: `good` is
+/// clean, `group/bad` has an unknown directory (a warning).
+fn skills_tree() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    let skill = |rel: &str| {
+        let dir = tmp.path().join(rel);
+        std::fs::create_dir_all(&dir).unwrap();
+        let name = dir.file_name().unwrap().to_str().unwrap().to_string();
+        std::fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: A test skill. Use when testing discovery.\n---\n# Skill\n\nUse it.\n"),
+        )
+        .unwrap();
+        dir
+    };
+    skill("good");
+    let bad = skill("group/bad");
+    std::fs::create_dir_all(bad.join("weird")).unwrap();
+    std::fs::write(bad.join("weird/x.md"), "x\n").unwrap();
+    tmp
+}
+
+#[test]
+fn discovery_validates_every_skill_below_the_path() {
+    let tmp = skills_tree();
+    let root = tmp.path();
+    let out = run(&[
+        "validate",
+        "structure",
+        "-o",
+        "json",
+        root.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&out), 2, "the warning in group/bad gates the run");
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let dirs: Vec<&str> = json["skills"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["skill_dir"].as_str().unwrap())
+        .collect();
+    let want = [root.join("good"), root.join("group/bad")];
+    assert_eq!(
+        dirs,
+        want.iter().map(|p| p.to_str().unwrap()).collect::<Vec<_>>()
+    );
+    assert_eq!(json["errors"], 0);
+    assert!(json["warnings"].as_u64().unwrap() >= 1);
+}
+
+#[test]
+fn discovery_text_ends_with_a_summary() {
+    let tmp = skills_tree();
+    let text = stdout(&run(&["check", tmp.path().to_str().unwrap()]));
+    assert!(text.contains("2 skills validated: all passed"), "{text}");
+    assert!(text.contains("Total: 0 errors,"), "{text}");
+}
+
+#[test]
+fn max_depth_bounds_discovery() {
+    let tmp = skills_tree();
+    let root = tmp.path().to_str().unwrap();
+    // Depth 1 finds only `good`, which is clean.
+    let out = run(&["validate", "structure", "--max-depth=1", "-o", "json", root]);
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["skills"].as_array().unwrap().len(), 1);
+    assert_eq!(code(&out), 0);
+    // Depth 0 checks the path itself, which has no SKILL.md: the
+    // single-skill error, as before discovery.
+    let out = run(&["validate", "structure", "--max-depth=0", root]);
+    assert_eq!(code(&out), 1);
+    assert!(stdout(&out).contains("SKILL.md not found"));
+    // A negative depth is a usage error.
+    assert_eq!(
+        code(&run(&["validate", "structure", "--max-depth=-1", root])),
+        3
+    );
+}
+
+#[test]
+fn analyze_content_reports_a_skill_that_does_not_load() {
+    let tmp = skills_tree();
+    let broken = tmp.path().join("broken");
+    std::fs::create_dir_all(&broken).unwrap();
+    std::fs::write(broken.join("SKILL.md"), "---\nname: [unclosed\n---\n").unwrap();
+    let out = run(&[
+        "analyze",
+        "content",
+        "-o",
+        "json",
+        tmp.path().to_str().unwrap(),
+    ]);
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let skills = json["skills"].as_array().unwrap();
+    assert_eq!(skills.len(), 3);
+    assert_eq!(json["errors"], 1);
+    assert!(skills.iter().filter(|s| s["content"].is_object()).count() == 2);
+    assert_eq!(code(&out), 1);
+}

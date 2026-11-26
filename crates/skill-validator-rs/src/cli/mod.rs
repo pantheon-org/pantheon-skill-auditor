@@ -17,11 +17,13 @@ mod run;
 use std::ffi::{OsStr, OsString};
 use std::process::ExitCode;
 
+use crate::discovery::{discover_skills, DEFAULT_MAX_DEPTH, MAX_DISCOVERY_DIRS};
 use crate::structure::paths::normalize_relative_paths;
+use crate::types::SkillMode;
 use crate::Options;
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
-use model::{exit_code, CliReport, OutputFormat};
+use model::{exit_code, CliReport, MultiCliReport, OutputFormat};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -71,6 +73,12 @@ struct Cli {
     /// Do not warn about unrecognised frontmatter fields.
     #[arg(long, global = true)]
     allow_extra_frontmatter: bool,
+
+    /// How many directory levels below <dir> to search for SKILL.md files
+    /// when <dir> itself has none (0 checks <dir> only). Applies to
+    /// `validate structure`, `check` and `analyze content`.
+    #[arg(long, global = true, value_name = "N", default_value_t = DEFAULT_MAX_DEPTH)]
+    max_depth: usize,
 
     /// Output format.
     #[arg(short = 'o', long, global = true, value_enum, default_value_t = OutputFormat::Text)]
@@ -215,6 +223,13 @@ where
         }
     };
 
+    if let Some(dir) = skill_dir_arg(&cli.command) {
+        if let Some(dirs) = discovered_skills(dir, cli.max_depth) {
+            let multi = run_multi(&cli, &opts, &dirs);
+            return finish_multi(&cli, &multi);
+        }
+    }
+
     match dispatch(&cli, &opts) {
         Ok((report, gated)) => finish(&cli, &report, gated),
         Err(message) => {
@@ -277,6 +292,70 @@ where
     T: Into<OsString> + Clone,
 {
     ExitCode::from(run_code(bin_name, args))
+}
+
+/// The skill directory of a command that discovers skills below its path.
+fn skill_dir_arg(command: &Command) -> Option<&str> {
+    match command {
+        Command::Validate {
+            group: ValidateGroup::Structure { dir },
+        }
+        | Command::Check { dir }
+        | Command::Analyze {
+            group: AnalyzeGroup::Content { dir },
+        } => Some(dir),
+        _ => None,
+    }
+}
+
+/// The skills found below `dir` when it has no SKILL.md of its own (Go
+/// `detectAndResolve`), or `None` to run the single-skill path unchanged:
+/// `dir` is a skill, `max_depth` is 0, or nothing was found (the single
+/// path then reports the missing SKILL.md, as before discovery existed).
+fn discovered_skills(dir: &str, max_depth: usize) -> Option<Vec<String>> {
+    let found = discover_skills(std::path::Path::new(dir), max_depth);
+    if found.truncated {
+        eprintln!(
+            "warning: skill discovery stopped after listing {MAX_DISCOVERY_DIRS} directories \
+             under {dir}; skills below that point were not found"
+        );
+    }
+    (found.mode == SkillMode::MultiSkill).then(|| {
+        found
+            .dirs
+            .iter()
+            .map(|d| d.to_string_lossy().into_owned())
+            .collect()
+    })
+}
+
+/// Run the selected skill command on each of `dirs`.
+fn run_multi(cli: &Cli, opts: &Options, dirs: &[String]) -> MultiCliReport {
+    let reports = dirs
+        .iter()
+        .map(|dir| match &cli.command {
+            Command::Check { .. } => run::check(dir, opts, cli.per_file),
+            Command::Analyze { .. } => run::analyze_content_report(dir),
+            _ => run::validate_structure(dir, opts),
+        })
+        .collect();
+    MultiCliReport::new(reports)
+}
+
+/// Print a multi-skill report (and annotations) and return the exit code,
+/// gated on the totals. `analyze content` only reports an error for a skill
+/// that does not load, so it is gated too, as upstream does.
+fn finish_multi(cli: &Cli, multi: &MultiCliReport) -> u8 {
+    if cli.emit_annotations {
+        let annotations = render::render_multi_annotations(multi);
+        if cli.output == OutputFormat::Json {
+            eprint!("{annotations}");
+        } else {
+            print!("{annotations}");
+        }
+    }
+    print!("{}", render::render_multi(multi, cli.output));
+    exit_code(multi.errors, multi.warnings, cli.strict) as u8
 }
 
 /// Run the selected command. The bool is whether the exit code is gated on the
