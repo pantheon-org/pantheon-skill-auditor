@@ -36,6 +36,14 @@ Until this repository has its own release, the latest is
 changes the depth, and `--max-depth=0` checks the path alone.
 Add `-o compact` for one line per skill with only its warnings and errors beneath it.
 
+`validate security <dir>` runs offline security checks over every text file in a skill: prompt-override
+phrases, private keys and live-format credentials, reverse shells, downloads piped into a shell, credential
+access, persistence, unverified package sources, hidden Unicode and opaque base64. Command rules only look at
+code (fenced or indented blocks in Markdown, every line of a script), so prose that describes a technique is
+not flagged. It is separate from `check` and does not affect the audit grade. The rules are curated from
+[agent-skills-eval](https://github.com/caohaotiantian/agent-skills-eval) and
+[SkillClinic](https://github.com/Dongdarealest/SkillClinic), both MIT licensed.
+
 ## Shell completion
 
 `pantheon-skill-auditor completion <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell` or

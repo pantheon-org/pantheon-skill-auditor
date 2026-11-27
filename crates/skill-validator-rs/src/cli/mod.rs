@@ -121,6 +121,12 @@ enum ValidateGroup {
         /// The skill directory.
         dir: String,
     },
+    /// Offline security checks: prompt overrides, secrets, reverse shells,
+    /// download-to-shell, credential access, hidden Unicode and opaque blobs.
+    Security {
+        /// The skill directory.
+        dir: String,
+    },
     /// Validate artifact conventions (script shebangs, schema/template
     /// placement, skill-dir layout, name match, self-containment).
     Artifacts {
@@ -298,7 +304,7 @@ where
 fn skill_dir_arg(command: &Command) -> Option<&str> {
     match command {
         Command::Validate {
-            group: ValidateGroup::Structure { dir },
+            group: ValidateGroup::Structure { dir } | ValidateGroup::Security { dir },
         }
         | Command::Check { dir }
         | Command::Analyze {
@@ -336,6 +342,9 @@ fn run_multi(cli: &Cli, opts: &Options, dirs: &[String]) -> MultiCliReport {
         .map(|dir| match &cli.command {
             Command::Check { .. } => run::check(dir, opts, cli.per_file),
             Command::Analyze { .. } => run::analyze_content_report(dir),
+            Command::Validate {
+                group: ValidateGroup::Security { .. },
+            } => run::validate_security(dir),
             _ => run::validate_structure(dir, opts),
         })
         .collect();
@@ -368,6 +377,9 @@ fn dispatch(cli: &Cli, opts: &Options) -> Result<(CliReport, bool), String> {
         Command::Validate {
             group: ValidateGroup::Artifacts { paths },
         } => Ok((run::validate_artifacts(paths), true)),
+        Command::Validate {
+            group: ValidateGroup::Security { dir },
+        } => Ok((run::validate_security(dir), true)),
         Command::Check { dir } => Ok((run::check(dir, opts, cli.per_file), true)),
         Command::Probes { .. } => unreachable!("handled before dispatch"),
         Command::Analyze {

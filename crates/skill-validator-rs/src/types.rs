@@ -307,6 +307,11 @@ impl ResultContext {
         self.build(Level::Pass, file, 0, msg.into())
     }
 
+    /// Info result with an explicit file.
+    pub fn info_file(&self, file: &str, msg: impl Into<String>) -> ValidationResult {
+        self.build(Level::Info, file, 0, msg.into())
+    }
+
     /// Warning result with an explicit file.
     pub fn warn_file(&self, file: &str, msg: impl Into<String>) -> ValidationResult {
         self.build(Level::Warning, file, 0, msg.into())
