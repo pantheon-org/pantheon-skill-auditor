@@ -19,6 +19,7 @@ use std::ffi::{OsStr, OsString};
 use std::process::ExitCode;
 
 use crate::discovery::{discover_skills, DEFAULT_MAX_DEPTH, MAX_DISCOVERY_DIRS};
+use crate::security::SecurityOptions;
 use crate::structure::paths::normalize_relative_paths;
 use crate::types::SkillMode;
 use crate::Options;
@@ -67,6 +68,12 @@ struct Cli {
     /// runs them).
     #[arg(long, global = true)]
     skip_security: bool,
+
+    /// Security rule IDs to allow (comma-separated, repeatable), e.g.
+    /// `--allow-security-rules=SEC020`. Allowed findings stay in the report
+    /// as info. Unlike an inline marker in the skill, this allows any rule.
+    #[arg(long, global = true, value_delimiter = ',', value_name = "CSV")]
+    allow_security_rules: Vec<String>,
 
     /// Promote warnings to a failing exit code (exit 1 instead of 2).
     #[arg(long, global = true)]
@@ -186,6 +193,25 @@ enum AnalyzeGroup {
 }
 
 impl Cli {
+    /// The security options. An unknown rule ID is a usage error.
+    fn security_options(&self) -> Result<SecurityOptions, String> {
+        let known = crate::security::rule_ids();
+        let mut allow_rules: Vec<String> = Vec::new();
+        for id in &self.allow_security_rules {
+            let id = id.trim().to_ascii_uppercase();
+            if !known.contains(&id.as_str()) {
+                return Err(format!(
+                    "invalid --allow-security-rules: unknown rule {id:?} (known: {})",
+                    known.join(", ")
+                ));
+            }
+            if !allow_rules.contains(&id) {
+                allow_rules.push(id);
+            }
+        }
+        Ok(SecurityOptions { allow_rules })
+    }
+
     /// The check options. A path flag that is not a path below the skill
     /// root is a usage error (Go `NormalizeRelativePaths` in `cmd/`).
     fn options(&self) -> Result<Options, String> {
@@ -228,8 +254,8 @@ where
         return probes_cmd::run(action);
     }
 
-    let opts = match cli.options() {
-        Ok(opts) => opts,
+    let (opts, sec) = match cli.options().and_then(|o| Ok((o, cli.security_options()?))) {
+        Ok(both) => both,
         Err(message) => {
             eprintln!("error: {message}");
             return 3;
@@ -238,12 +264,12 @@ where
 
     if let Some(dir) = skill_dir_arg(&cli.command) {
         if let Some(dirs) = discovered_skills(dir, cli.max_depth) {
-            let multi = run_multi(&cli, &opts, &dirs);
+            let multi = run_multi(&cli, &opts, &sec, &dirs);
             return finish_multi(&cli, &multi);
         }
     }
 
-    match dispatch(&cli, &opts) {
+    match dispatch(&cli, &opts, &sec) {
         Ok((report, gated)) => finish(&cli, &report, gated),
         Err(message) => {
             eprintln!("error: {message}");
@@ -343,15 +369,17 @@ fn discovered_skills(dir: &str, max_depth: usize) -> Option<Vec<String>> {
 }
 
 /// Run the selected skill command on each of `dirs`.
-fn run_multi(cli: &Cli, opts: &Options, dirs: &[String]) -> MultiCliReport {
+fn run_multi(cli: &Cli, opts: &Options, sec: &SecurityOptions, dirs: &[String]) -> MultiCliReport {
     let reports = dirs
         .iter()
         .map(|dir| match &cli.command {
-            Command::Check { .. } => run::check(dir, opts, cli.per_file, !cli.skip_security),
+            Command::Check { .. } => {
+                run::check(dir, opts, cli.per_file, (!cli.skip_security).then_some(sec))
+            }
             Command::Analyze { .. } => run::analyze_content_report(dir),
             Command::Validate {
                 group: ValidateGroup::Security { .. },
-            } => run::validate_security(dir),
+            } => run::validate_security(dir, sec),
             _ => run::validate_structure(dir, opts),
         })
         .collect();
@@ -376,7 +404,7 @@ fn finish_multi(cli: &Cli, multi: &MultiCliReport) -> u8 {
 
 /// Run the selected command. The bool is whether the exit code is gated on the
 /// report's findings (`false` for pure analysis, which is always exit 0).
-fn dispatch(cli: &Cli, opts: &Options) -> Result<(CliReport, bool), String> {
+fn dispatch(cli: &Cli, opts: &Options, sec: &SecurityOptions) -> Result<(CliReport, bool), String> {
     match &cli.command {
         Command::Validate {
             group: ValidateGroup::Structure { dir },
@@ -386,9 +414,9 @@ fn dispatch(cli: &Cli, opts: &Options) -> Result<(CliReport, bool), String> {
         } => Ok((run::validate_artifacts(paths), true)),
         Command::Validate {
             group: ValidateGroup::Security { dir },
-        } => Ok((run::validate_security(dir), true)),
+        } => Ok((run::validate_security(dir, sec), true)),
         Command::Check { dir } => Ok((
-            run::check(dir, opts, cli.per_file, !cli.skip_security),
+            run::check(dir, opts, cli.per_file, (!cli.skip_security).then_some(sec)),
             true,
         )),
         Command::Probes { .. } => unreachable!("handled before dispatch"),

@@ -29,8 +29,8 @@ pub fn validate_structure(dir: &str, opts: &Options) -> CliReport {
 }
 
 /// Run `validate security <dir>`: the offline security checks.
-pub fn validate_security(dir: &str) -> CliReport {
-    let results = crate::security::check_security(Path::new(dir));
+pub fn validate_security(dir: &str, opts: &crate::security::SecurityOptions) -> CliReport {
+    let results = crate::security::check_security(Path::new(dir), opts);
     let count = |level| results.iter().filter(|r| r.level == level).count();
     CliReport {
         skill_dir: dir.to_string(),
@@ -42,13 +42,18 @@ pub fn validate_security(dir: &str) -> CliReport {
 }
 
 /// Run `check <dir>`: the structure group, the security checks (unless
-/// `security` is false), and content and contamination analysis of SKILL.md
+/// `security` is `None`), and content and contamination analysis of SKILL.md
 /// and (when `per_file`) of each reference file.
-pub fn check(dir: &str, opts: &Options, per_file: bool, security: bool) -> CliReport {
+pub fn check(
+    dir: &str,
+    opts: &Options,
+    per_file: bool,
+    security: Option<&crate::security::SecurityOptions>,
+) -> CliReport {
     let mut cli = validate_structure(dir, opts);
     // The structure group already reports a missing SKILL.md.
-    if security && Path::new(dir).join("SKILL.md").exists() {
-        let found = validate_security(dir);
+    if let Some(sec) = security.filter(|_| Path::new(dir).join("SKILL.md").exists()) {
+        let found = validate_security(dir, sec);
         cli.errors += found.errors;
         cli.warnings += found.warnings;
         cli.results.extend(found.results);
