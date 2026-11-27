@@ -44,6 +44,12 @@ not flagged. `check` runs them too (`--skip-security` leaves them out); they do 
 [agent-skills-eval](https://github.com/caohaotiantian/agent-skills-eval) and
 [SkillClinic](https://github.com/Dongdarealest/SkillClinic), both MIT licensed.
 
+A finding can be allowed, and stays in the report as an info result. In the skill, a comment such as
+`# skill-validator: allow SEC020 -- the vendor's documented installer` on the matching line or the line above it
+allows warning-level rules only; a marker for an error-level rule (a prompt override, a key, a reverse shell,
+hidden Unicode) has no effect and is reported, so a skill cannot hide its own findings. Whoever runs the check can
+allow any rule with `--allow-security-rules=SEC001,SEC020`.
+
 ## Shell completion
 
 `pantheon-skill-auditor completion <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell` or
