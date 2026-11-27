@@ -1,0 +1,35 @@
+# When a version tag is pushed, moves the merged release-please PR for that version
+# from "autorelease: pending" to "autorelease: tagged". release-please only does
+# this when it creates the GitHub Release itself, which this repository leaves to
+# cargo-dist; a release PR left pending makes every later release-please run
+# abort. Kept by hand (not rendered by pantheon-scaffold).
+name: Release Label
+'on':
+  push:
+    tags:
+    - '**[0-9]+.[0-9]+.[0-9]+*'
+permissions:
+  contents: read
+concurrency:
+  group: release-label
+  cancel-in-progress: false
+jobs:
+  label:
+    name: Label the release PR as tagged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+    - name: Checkout scripts
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+        sparse-checkout: .github/scripts
+    - name: Relabel the release PR
+      run: bash .github/scripts/label-release-pr.sh
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
