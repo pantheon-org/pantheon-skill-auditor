@@ -41,13 +41,22 @@ pub fn validate_security(dir: &str) -> CliReport {
     }
 }
 
-/// Run `check <dir>`: the structure group plus content and contamination
-/// analysis of SKILL.md, and (when `per_file`) of each reference file.
-pub fn check(dir: &str, opts: &Options, per_file: bool) -> CliReport {
+/// Run `check <dir>`: the structure group, the security checks (unless
+/// `security` is false), and content and contamination analysis of SKILL.md
+/// and (when `per_file`) of each reference file.
+pub fn check(dir: &str, opts: &Options, per_file: bool, security: bool) -> CliReport {
     let mut cli = validate_structure(dir, opts);
+    // The structure group already reports a missing SKILL.md.
+    if security && Path::new(dir).join("SKILL.md").exists() {
+        let found = validate_security(dir);
+        cli.errors += found.errors;
+        cli.warnings += found.warnings;
+        cli.results.extend(found.results);
+    }
 
     // Content and contamination are metrics groups: they enrich the report but
-    // never add findings, so the exit code stays driven by the structure group.
+    // never add findings, so the exit code stays driven by the structure and
+    // security groups.
     let path = Path::new(dir);
     if let Ok(skill) = Skill::load(path) {
         let content = analyze_content(&skill.raw_content);

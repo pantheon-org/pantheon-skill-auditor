@@ -7,7 +7,8 @@
 //! Hook-parity invocations (see `hk.pkl`, repointed by A6):
 //! - pre-commit: `skill-validator-rs validate structure --allow-dirs=evals <dir>`
 //!   (orphan checks run: `--skip-orphans` defaults false).
-//! - pre-push:   `skill-validator-rs check --allow-dirs=evals --per-file <dir>`.
+//! - pre-push:   `skill-validator-rs check --allow-dirs=evals --per-file <dir>`
+//!   (security checks run: `--skip-security` defaults false).
 
 mod model;
 mod probes_cmd;
@@ -62,6 +63,11 @@ struct Cli {
     #[arg(long, global = true)]
     skip_orphans: bool,
 
+    /// Leave the security checks out of `check` (`validate security` still
+    /// runs them).
+    #[arg(long, global = true)]
+    skip_security: bool,
+
     /// Promote warnings to a failing exit code (exit 1 instead of 2).
     #[arg(long, global = true)]
     strict: bool,
@@ -96,7 +102,8 @@ enum Command {
         #[command(subcommand)]
         group: ValidateGroup,
     },
-    /// Run every group (structure, links, content, contamination) on a skill.
+    /// Run every group (structure, links, security, content, contamination)
+    /// on a skill.
     Check {
         /// The skill directory.
         dir: String,
@@ -340,7 +347,7 @@ fn run_multi(cli: &Cli, opts: &Options, dirs: &[String]) -> MultiCliReport {
     let reports = dirs
         .iter()
         .map(|dir| match &cli.command {
-            Command::Check { .. } => run::check(dir, opts, cli.per_file),
+            Command::Check { .. } => run::check(dir, opts, cli.per_file, !cli.skip_security),
             Command::Analyze { .. } => run::analyze_content_report(dir),
             Command::Validate {
                 group: ValidateGroup::Security { .. },
@@ -380,7 +387,10 @@ fn dispatch(cli: &Cli, opts: &Options) -> Result<(CliReport, bool), String> {
         Command::Validate {
             group: ValidateGroup::Security { dir },
         } => Ok((run::validate_security(dir), true)),
-        Command::Check { dir } => Ok((run::check(dir, opts, cli.per_file), true)),
+        Command::Check { dir } => Ok((
+            run::check(dir, opts, cli.per_file, !cli.skip_security),
+            true,
+        )),
         Command::Probes { .. } => unreachable!("handled before dispatch"),
         Command::Analyze {
             group: AnalyzeGroup::Content { dir },

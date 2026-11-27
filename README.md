@@ -40,7 +40,7 @@ Add `-o compact` for one line per skill with only its warnings and errors beneat
 phrases, private keys and live-format credentials, reverse shells, downloads piped into a shell, credential
 access, persistence, unverified package sources, hidden Unicode and opaque base64. Command rules only look at
 code (fenced or indented blocks in Markdown, every line of a script), so prose that describes a technique is
-not flagged. It is separate from `check` and does not affect the audit grade. The rules are curated from
+not flagged. `check` runs them too (`--skip-security` leaves them out); they do not affect the audit grade. The rules are curated from
 [agent-skills-eval](https://github.com/caohaotiantian/agent-skills-eval) and
 [SkillClinic](https://github.com/Dongdarealest/SkillClinic), both MIT licensed.
 
