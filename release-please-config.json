@@ -6,11 +6,16 @@
   "bump-patch-for-minor-pre-major": false,
   "skip-github-release": true,
   "packages": {
-    "crates/skill-auditor": {
-      "release-type": "rust",
+    ".": {
+      "release-type": "simple",
       "package-name": "pantheon-skill-auditor",
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "crates/skill-auditor/CHANGELOG.md",
       "extra-files": [
+        {
+          "type": "toml",
+          "path": "/crates/skill-auditor/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
         {
           "type": "toml",
           "path": "/Cargo.lock",
