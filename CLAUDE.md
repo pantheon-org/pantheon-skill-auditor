@@ -25,7 +25,7 @@ how it is installed.
 The CI, tooling and lint files are rendered from the `pantheon-scaffold` package by `scaffold.pkl`, and `Scaffold check`
 fails when one drifts. Change `scaffold.pkl` (for example `toolchain`) and run
 `pantheon-scaffold render scaffold.pkl` instead of editing a rendered file by hand, or move to a newer package with `pantheon-scaffold upgrade <version>`. Kept by
-hand: `hk.pkl`, the release-please files, `SECURITY.md`, the cargo-dist `release.yml` and `.mise/conf.d/repo.toml`.
+hand: `hk.pkl`, the release-please files, `SECURITY.md`, the cargo-dist `release.yml`, `release-label.yml` (with its script) and `.mise/conf.d/repo.toml`.
 Dependabot skips the rendered workflows, so their action pins move with `upgrade`. It also ignores
 `actions/upload-artifact` and `actions/download-artifact`: set their commits in `dist-workspace.toml`, then run
 `dist generate`. `hk.pkl` does not import `hk.shared.pkl` yet.
